@@ -2,6 +2,81 @@ import java.util.zip.CRC32;
 
 public class Packet {
     
+    public int tipo;
+    public String origem;
+    public String destino;
+    public String ipOrigem;
+    public String ipDestino;
+    public long crc;
+    public String flag;
+    public int ttl;
+    public int sequencia;
+    public String mensagem;
+
+    public Packet(byte[] packet)
+    {
+        int i = 0;
+        String tipoString = "";
+        for (byte b : packet) {
+            i++;
+            if ((char)b == ':') break;
+            tipoString += (char) b;
+        }
+        System.out.println(tipoString);
+        this.tipo = Integer.parseInt(tipoString);
+
+        if (this.tipo == 1000) return;
+
+        String nomeString = "";
+        while (true) {
+            byte b = packet[i++];
+            if ((char)b != ':') break;
+            nomeString += (char)b;
+        }
+        this.origem = nomeString;
+
+        switch (this.tipo) {
+            case 10:    
+            case 20:
+                this.ipOrigem = read(packet, i);
+                i += this.ipOrigem.length();
+                if (this.tipo == 10) return;
+
+                String crcString = read(packet, i);
+                i += crcString.length();
+                this.crc = Long.parseLong(crcString);
+                break;
+            case 2000:
+                this.flag = read(packet, i);
+                i += this.flag.length();
+                String seq = read(packet, i);
+                i += seq.length();
+                this.sequencia = Integer.parseInt(seq);
+                String ttlString = read(packet, i);
+                i += ttlString.length();
+                this.ttl = Integer.parseInt(ttlString);
+                this.mensagem = read(packet, i);
+                i += this.mensagem.length();
+                String crcString2 = read(packet, i);
+                i += crcString2.length();
+                this.crc = Long.parseLong(crcString2);
+                break;
+        }
+        
+    }
+
+    public static String read(byte[] packet, int start)
+    {
+        String out = "";
+        while (true) {
+            if (start == packet.length) break;
+            byte b = packet[start++];
+            if ((char)b != ':') break;
+            out += (char)b;
+        }
+        return out;
+    }
+
     public static String discover(String origem, String origemIP)
     {
         return "10:"+origem+":"+origemIP;
