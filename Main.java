@@ -17,7 +17,7 @@ public class Main {
             socket.setBroadcast(true);
             //socket.bind(null);
 
-            String pac = Packet.discover("A", "10.32.160.153");
+            String pac = Packet.discover("A", "10.32.162.140");
             System.out.println(Inet4Address.getLocalHost().toString());
             socket.send(
                     new DatagramPacket(pac.getBytes(), pac.getBytes().length, InetAddress.getByName("255.255.255.255"),
