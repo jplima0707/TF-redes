@@ -13,7 +13,7 @@ public class Packet {
     public int sequencia;
     public String mensagem;
 
-    public Packet(byte[] packet)
+    public Packet(byte[] packet, int size)
     {
         int i = 0;
         String tipoString = "";
@@ -27,37 +27,33 @@ public class Packet {
 
         if (this.tipo == 1000) return;
 
-        String nomeString = "";
-        while (true) {
-            byte b = packet[i++];
-            if ((char)b != ':') break;
-            nomeString += (char)b;
-        }
-        this.origem = nomeString;
+
+        this.origem = read(packet, i++, size);
+        i += origem.length();
 
         switch (this.tipo) {
             case 10:    
             case 20:
-                this.ipOrigem = read(packet, i);
+                this.ipOrigem = read(packet, i++, size);
                 i += this.ipOrigem.length();
                 if (this.tipo == 10) return;
 
-                String crcString = read(packet, i);
+                String crcString = read(packet, i++, size);
                 i += crcString.length();
                 this.crc = Long.parseLong(crcString);
                 break;
             case 2000:
-                this.flag = read(packet, i);
+                this.flag = read(packet, i++, size);
                 i += this.flag.length();
-                String seq = read(packet, i);
+                String seq = read(packet, i++, size);
                 i += seq.length();
                 this.sequencia = Integer.parseInt(seq);
-                String ttlString = read(packet, i);
+                String ttlString = read(packet, i++, size);
                 i += ttlString.length();
                 this.ttl = Integer.parseInt(ttlString);
-                this.mensagem = read(packet, i);
+                this.mensagem = read(packet, i++, size);
                 i += this.mensagem.length();
-                String crcString2 = read(packet, i);
+                String crcString2 = read(packet, i++, size);
                 i += crcString2.length();
                 this.crc = Long.parseLong(crcString2);
                 break;
@@ -65,13 +61,13 @@ public class Packet {
         
     }
 
-    public static String read(byte[] packet, int start)
+    public static String read(byte[] packet, int start, int max)
     {
         String out = "";
         while (true) {
-            if (start == packet.length) break;
+            if (start == max) break;
             byte b = packet[start++];
-            if ((char)b != ':') break;
+            if ((char)b == ':') break;
             out += (char)b;
         }
         return out;

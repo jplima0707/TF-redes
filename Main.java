@@ -17,7 +17,7 @@ public class Main {
             socket.setBroadcast(true);
             //socket.bind(null);
 
-            String pac = Packet.discover("A", "10.32.162.140");
+            String pac = Packet.discover("A", "10.32.160.153");
             System.out.println(Inet4Address.getLocalHost().toString());
             socket.send(
                     new DatagramPacket(pac.getBytes(), pac.getBytes().length, InetAddress.getByName("255.255.255.255"),
@@ -29,20 +29,21 @@ public class Main {
 
             long start_time = System.currentTimeMillis();
 
-            DatagramPacket dp = new DatagramPacket(new byte[255], 255);
-            ArrayList<byte[]> hellos = new ArrayList<>();
+            
+            ArrayList<DatagramPacket> hellos = new ArrayList<>();
             while (System.currentTimeMillis() < start_time + 1000) {
+                DatagramPacket dp = new DatagramPacket(new byte[255], 255);
                 try {
                     socket.receive(dp);
                 } catch (SocketTimeoutException e) {
                     // TODO: handle exception
                     break;
                 }
-                hellos.add(dp.getData());
+                hellos.add(dp);
             }
 
-            for (byte[] hello : hellos) {
-                Packet p = new Packet(hello);
+            for (DatagramPacket hello : hellos) {
+                Packet p = new Packet(hello.getData(), hello.getLength());
                 System.out.printf("%d:%s:%s:%d%n",p.tipo,p.origem,p.ipOrigem,p.crc);
                 if (p.tipo != 20)
                 {
