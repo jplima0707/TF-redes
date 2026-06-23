@@ -41,16 +41,10 @@ public class Ring implements Runnable{
 
     public synchronized boolean initialize() throws Exception
     {
-        DatagramSocket socket = new DatagramSocket(port);
-        socket.setBroadcast(true);
-        //socket.bind(null);
-
         String pac = Packet.discover(this.nomeDaMaquina, this.selfIP);
-        System.out.println(Inet4Address.getLocalHost().toString());
-        socket.send(
+        this.socket.sendBroadcast(
                 new DatagramPacket(pac.getBytes(), pac.getBytes().length, InetAddress.getByName("255.255.255.255"),
                         port));
-        socket.close();
         System.out.println(pac);
 
         long start_time = System.currentTimeMillis();

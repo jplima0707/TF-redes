@@ -20,7 +20,7 @@ public class Main {
             Ring ring = new Ring(conf, ip, port);
 
             // Java não tem recebimento de pacote não bloqueante, então tem que ter uma Thread a parte para receber
-            Udp network = new Udp(port, ring.getPrevIP(), ring.getNextIP(), conf.getNome(), ring);
+            Udp network = new Udp(port, conf.getNome(), ring);
             ring.setSocket(network);
             network.initialize();
 
