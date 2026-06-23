@@ -22,7 +22,13 @@ public class Main {
             // Java não tem recebimento de pacote não bloqueante, então tem que ter uma Thread a parte para receber
             Udp network = new Udp(port, conf.getNome(), ring);
             ring.setSocket(network);
-            network.initialize();
+            new Thread(() -> {try {
+                network.initialize();
+            } catch (Exception e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }}).start();
+            
 
             // Inicia o anel, se estiver sozinho espera 10s e tenta de novo
             while (!ring.initialize()) {

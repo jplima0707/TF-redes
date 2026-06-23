@@ -48,6 +48,9 @@ public class Ring implements Runnable{
         System.out.println(pac);
 
         long start_time = System.currentTimeMillis();
+        while (System.currentTimeMillis() < start_time + 1000) {
+            
+        }
         
         this.anel = new LinkedList<>();
 
