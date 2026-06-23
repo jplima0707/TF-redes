@@ -58,7 +58,7 @@ public class Ring implements Runnable{
         // Coisa feia para incluir esse processo no mapa do anel
         Packet self = new Packet(Packet.hello(this.nomeDaMaquina, this.selfIP).getBytes(),Packet.hello(this.nomeDaMaquina, this.selfIP).getBytes().length);
 
-        this.anel.add(self);
+        //this.anel.add(self);
 
         for (Packet p : this.hellos) {
             System.out.printf("Processando: %s%n",p);
@@ -85,7 +85,7 @@ public class Ring implements Runnable{
         // Agora que sabemos o anel, podemos fazer os sockets corretamente pro próximo e anterior do anel
         int selfIndex = this.anel.indexOf(self);
         Packet next = this.anel.get(selfIndex+1 > this.anel.size() ? 0 : selfIndex+1);
-        Packet prev = this.anel.get(selfIndex-1 < 0 ? this.anel.size() : selfIndex-1);
+        Packet prev = this.anel.get(selfIndex-1 < 0 ? this.anel.size() - 1 : selfIndex-1);
         
         this.nextIP = next.ipOrigem;
         this.prevIP = prev.ipOrigem;
