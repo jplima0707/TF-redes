@@ -4,6 +4,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -107,8 +108,9 @@ public class Ring implements Runnable{
 
     public void chegouMensagem() {}
 
-    public void chegouUmDiscover(Packet p) {
-        this.socket.sendBroadcast(new DatagramPacket(Packet.hello(nomeDaMaquina, selfIP).getBytes(), Packet.hello(nomeDaMaquina, selfIP).getBytes().length));
+    public void chegouUmDiscover(Packet p) throws Exception {
+        this.socket.sendBroadcast(new DatagramPacket(Packet.hello(nomeDaMaquina, selfIP).getBytes(), 
+        Packet.hello(nomeDaMaquina, selfIP).getBytes().length, InetAddress.getByName("255.255.255.255"), this.port));
     }
 
     public void novaMensagemParaEnviar(String mensagem) {}
