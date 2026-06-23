@@ -126,9 +126,21 @@ public class Udp implements Runnable{
         }
     }
     public void setInSocket(String inIP) throws Exception {
+        if (this.outSocket != null) {
+            if (this.outSocket.getInetAddress() == InetAddress.getByName(inIP))
+            {
+                this.inSocket = this.outSocket;
+            }
+        }
         this.inSocket = new DatagramSocket(this.port, InetAddress.getByName(inIP));
     }
     public void setOutSocket(String outIP) throws Exception {
+        if (this.inSocket != null) {
+            if (this.inSocket.getInetAddress() == InetAddress.getByName(outIP))
+            {
+                this.outSocket = this.inSocket;
+            }
+        }
         this.outSocket = new DatagramSocket(this.port, InetAddress.getByName(outIP));
     }
 
