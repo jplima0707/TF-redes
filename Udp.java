@@ -19,7 +19,10 @@ public class Udp implements Runnable{
         this.bcSocket = new DatagramSocket(port);
         this.bcSocket.setBroadcast(true);
         this.inSocket = new DatagramSocket(port, InetAddress.getByName(inIP));
-        this.outSocket = new DatagramSocket(port, InetAddress.getByName(outIP));
+        if (inIP.equals(outIP)) {
+            this.outSocket = inSocket;
+        }
+        else this.outSocket = new DatagramSocket(port, InetAddress.getByName(outIP));
         this.selfNome = self;
         this.ring = ring;
         this.port = port;

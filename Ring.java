@@ -74,7 +74,7 @@ public class Ring implements Runnable{
             }
             else System.out.printf("Nome repetido no anel: %s%n",p.toString());
         }
-        
+        System.out.printf("Hosts encontrados: %d%n",this.anel.size());
         // Temos que ordenar por ordem alfabética (testar e ver se funciona como esperado)
         this.anel.sort((x,y) -> x.origem.compareToIgnoreCase(y.origem));
 
