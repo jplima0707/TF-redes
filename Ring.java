@@ -69,6 +69,7 @@ public class Ring implements Runnable{
                 continue;
             }
             // Verifica se não é repetido - também impede nomes repetidos com ips diferentes, mas falha sileciosamente
+            System.out.println(p.origem);
             if (this.anel.stream().noneMatch(x -> x.origem == p.origem)) {
                 this.anel.add(p);
             }
@@ -78,6 +79,11 @@ public class Ring implements Runnable{
         // Temos que ordenar por ordem alfabética (testar e ver se funciona como esperado)
         this.anel.sort((x,y) -> x.origem.compareToIgnoreCase(y.origem));
 
+        for (Packet packet : anel) {
+            System.out.printf("%s ->",packet.origem);
+        }
+        System.out.println();
+        
         if (this.anel.size() == 1) {
             // Estamos sozinhos
             return false;
