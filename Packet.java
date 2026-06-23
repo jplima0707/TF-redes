@@ -6,7 +6,6 @@ public class Packet {
     public String origem;
     public String destino;
     public String ipOrigem;
-    public String ipDestino;
     public long crc = Integer.MIN_VALUE;
     public String flag;
     public int ttl = Integer.MIN_VALUE;
@@ -137,9 +136,6 @@ public class Packet {
         }
         if (this.ipOrigem != null) {
             sb.append(":"+this.ipOrigem);
-        }
-        if (this.ipDestino != null) {
-            sb.append(":"+this.ipDestino);
         }
         if (this.flag != null) {
             sb.append(":"+this.flag);

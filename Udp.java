@@ -7,13 +7,15 @@ public class Udp implements Runnable{
 
     public DatagramSocket inSocket;
     public DatagramSocket outSocket;
-    public Packet self;
+    public String selfNome;
+    private Ring ring;
 
-    public Udp(int port, String inIP, String outIP, Packet self) throws Exception
+    public Udp(int port, String inIP, String outIP, String self, Ring ring) throws Exception
     {
         this.inSocket = new DatagramSocket(port, InetAddress.getByName(inIP));
         this.outSocket = new DatagramSocket(port, InetAddress.getByName(outIP));
-        this.self = self;
+        this.selfNome = self;
+        this.ring = ring;
     }
 
     // synchronized evita acesso simultâneo
@@ -39,25 +41,30 @@ public class Udp implements Runnable{
                 switch (recebido.tipo) {
                     case 10:
                         // Pede pra Thread principal enviar o hello e atualizar a topologia 
+                        this.ring.chegouUmHello();
                         break;
                     case 20:
-                        // Ignora?
+                        // Heartbeat
                         break;
                     case 1000:
                         // Avisa a Thread principal que pode enviar
+                        this.ring.chegouToken();
                         break;
                     case 2000:
                         // Analisa e encaminha o pacote pra frente
-                        if (recebido.destino == self.destino)
+                        if (recebido.destino == selfNome)
                         {
                             // É pra essa máquina
+                            this.ring.chegouMensagem();
                         }
                         else
                         {
                             // É para outra máquina
                             if (recebido.valid) {
-                                
+                                String toSend = Packet.data(recebido.origem, recebido.origem, recebido.flag, recebido.sequencia, recebido.ttl-1, recebido.mensagem);
+                                this.sendPacket(new DatagramPacket(toSend.getBytes(), toSend.getBytes().length));
                             }
+                            // Se não é válido fazemos o que?
                         }
                     default:
                         break;
