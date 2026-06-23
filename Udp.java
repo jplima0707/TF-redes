@@ -37,9 +37,8 @@ public class Udp implements Runnable{
 
     public void initialize() throws Exception
     {
-        long start = System.currentTimeMillis();
         DatagramPacket p = new DatagramPacket(new byte[255], 255);
-        while (System.currentTimeMillis() < start + 1200) {
+        while (true) {
             bcSocket.receive(p);
             Packet pa = new Packet(p.getData(), p.getLength());
             switch (pa.tipo) {

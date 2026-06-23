@@ -42,6 +42,7 @@ public class Ring implements Runnable{
 
     public synchronized boolean initialize() throws Exception
     {
+        this.hellos = new ArrayList<>();
         String pac = Packet.discover(this.nomeDaMaquina, this.selfIP);
         this.socket.sendBroadcast(
                 new DatagramPacket(pac.getBytes(), pac.getBytes().length, InetAddress.getByName("255.255.255.255"),
