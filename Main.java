@@ -40,10 +40,7 @@ public class Main {
                 }
             }
             t.interrupt();
-            // Configura inSocket e outSocket
-            network.setInSocket(ring.getPrevIP());
-            network.setOutSocket(ring.getNextIP());
-
+            
             //Em algum lugar, tem que mandar o heartbeat de 10 em 10 segundos
 
             //Recebe input do terminal

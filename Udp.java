@@ -2,11 +2,10 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 
 public class Udp implements Runnable{
 
+    // Não fazer dois sockets diferentes
     public DatagramSocket inSocket;
     public DatagramSocket outSocket;
     private DatagramSocket bcSocket;
@@ -18,11 +17,8 @@ public class Udp implements Runnable{
     {
         this.bcSocket = new DatagramSocket(port);
         this.bcSocket.setBroadcast(true);
-        this.inSocket = new DatagramSocket(port, InetAddress.getByName(inIP));
-        if (inIP.equals(outIP)) {
-            this.outSocket = inSocket;
-        }
-        else this.outSocket = new DatagramSocket(port, InetAddress.getByName(outIP));
+        this.inSocket = bcSocket;
+        this.outSocket = bcSocket;
         this.selfNome = self;
         this.ring = ring;
         this.port = port;
@@ -31,8 +27,8 @@ public class Udp implements Runnable{
     {
         this.bcSocket = new DatagramSocket(port);
         this.bcSocket.setBroadcast(true);
-        this.inSocket = null;
-        this.outSocket = null;
+        this.inSocket = bcSocket;
+        this.outSocket = bcSocket;
         this.selfNome = self;
         this.ring = ring;
         this.port = port;
@@ -125,23 +121,4 @@ public class Udp implements Runnable{
             }
         }
     }
-    public void setInSocket(String inIP) throws Exception {
-        if (this.outSocket != null) {
-            if (this.outSocket.getInetAddress() == InetAddress.getByName(inIP))
-            {
-                this.inSocket = this.outSocket;
-            }
-        }
-        this.inSocket = new DatagramSocket(this.port, InetAddress.getByName(inIP));
-    }
-    public void setOutSocket(String outIP) throws Exception {
-        if (this.inSocket != null) {
-            if (this.inSocket.getInetAddress() == InetAddress.getByName(outIP))
-            {
-                this.outSocket = this.inSocket;
-            }
-        }
-        this.outSocket = new DatagramSocket(this.port, InetAddress.getByName(outIP));
-    }
-
 }
