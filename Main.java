@@ -19,6 +19,11 @@ public class Main {
 
             Ring ring = new Ring(conf, ip, port);
 
+            // Java não tem recebimento de pacote não bloqueante, então tem que ter uma Thread a parte para receber
+            Udp network = new Udp(port, ring.getPrevIP(), ring.getNextIP(), conf.getNome(), ring);
+            ring.setSocket(network);
+            network.initialize();
+
             // Inicia o anel, se estiver sozinho espera 10s e tenta de novo
             while (!ring.initialize()) {
                 try {
@@ -27,10 +32,9 @@ public class Main {
                     Thread.currentThread().interrupt();
                 }
             }
-            // Java não tem recebimento de pacote não bloqueante, então tem que ter uma Thread a parte para receber
-            Udp network = new Udp(port, ring.getPrevIP(), ring.getNextIP(), conf.getNome(), ring);
-            ring.setSocket(network);
-            network.run();
+            // Configura inSocket e outSocket
+            network.setInSocket(ring.getPrevIP());
+            network.setOutSocket(ring.getNextIP());
 
             //Em algum lugar, tem que mandar o heartbeat de 10 em 10 segundos
 

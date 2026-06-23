@@ -2,22 +2,68 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 
 public class Udp implements Runnable{
 
     public DatagramSocket inSocket;
     public DatagramSocket outSocket;
+    private DatagramSocket bcSocket;
     public String selfNome;
     private Ring ring;
+    private int port;
 
     public Udp(int port, String inIP, String outIP, String self, Ring ring) throws Exception
     {
+        this.bcSocket = new DatagramSocket(port);
+        this.bcSocket.setBroadcast(true);
         this.inSocket = new DatagramSocket(port, InetAddress.getByName(inIP));
         this.outSocket = new DatagramSocket(port, InetAddress.getByName(outIP));
         this.selfNome = self;
         this.ring = ring;
+        this.port = port;
+    }
+    public Udp(int port, String self, Ring ring) throws Exception
+    {
+        this.bcSocket = new DatagramSocket(port);
+        this.bcSocket.setBroadcast(true);
+        this.inSocket = null;
+        this.outSocket = null;
+        this.selfNome = self;
+        this.ring = ring;
+        this.port = port;
     }
 
+    public void initialize() throws Exception
+    {
+        long start = System.currentTimeMillis();
+        DatagramPacket p = new DatagramPacket(new byte[255], 255);
+        while (System.currentTimeMillis() < start + 1200) {
+            bcSocket.receive(p);
+            Packet pa = new Packet(p.getData(), p.getLength());
+            switch (pa.tipo) {
+                case 10:
+                    ring.chegouUmDiscover(pa);
+                    break;
+                case 20:
+                    ring.chegouUmHello(pa);
+                default:
+                    break;
+            }
+        }
+    }
+    public synchronized boolean sendBroadcast(DatagramPacket p)
+    {
+        try {
+            bcSocket.send(p);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
     // synchronized evita acesso simultâneo
     public synchronized boolean sendPacket(DatagramPacket p)
     {
@@ -41,10 +87,11 @@ public class Udp implements Runnable{
                 switch (recebido.tipo) {
                     case 10:
                         // Pede pra Thread principal enviar o hello e atualizar a topologia 
-                        this.ring.chegouUmHello();
+                        //this.ring.chegouUmDiscover();
                         break;
                     case 20:
                         // Heartbeat
+                        //this.ring.chegouUmHello();
                         break;
                     case 1000:
                         // Avisa a Thread principal que pode enviar
@@ -76,6 +123,11 @@ public class Udp implements Runnable{
             }
         }
     }
-
+    public void setInSocket(String inIP) throws Exception {
+        this.inSocket = new DatagramSocket(this.port, InetAddress.getByName(inIP));
+    }
+    public void setOutSocket(String outIP) throws Exception {
+        this.outSocket = new DatagramSocket(this.port, InetAddress.getByName(outIP));
+    }
 
 }

@@ -17,6 +17,7 @@ public class Ring implements Runnable{
     private int tempoMinimoToken;
     private String selfIP;
     private int port;
+    private ArrayList<Packet> hellos = new ArrayList<>();
 
     // Parâmetros calculados na inicialização
     private String nextIP;
@@ -49,24 +50,11 @@ public class Ring implements Runnable{
         socket.send(
                 new DatagramPacket(pac.getBytes(), pac.getBytes().length, InetAddress.getByName("255.255.255.255"),
                         port));
-
+        socket.close();
         System.out.println(pac);
-
-        socket.setSoTimeout(1000);
 
         long start_time = System.currentTimeMillis();
         
-        ArrayList<DatagramPacket> hellos = new ArrayList<>();
-        while (System.currentTimeMillis() < start_time + 1000) {
-            DatagramPacket dp = new DatagramPacket(new byte[255], 255);
-            try {
-                socket.receive(dp);
-            } catch (SocketTimeoutException e) {
-                break;
-            }
-            hellos.add(dp);
-        }
-
         this.anel = new LinkedList<>();
 
         // Coisa feia para incluir esse processo no mapa do anel
@@ -74,8 +62,7 @@ public class Ring implements Runnable{
 
         this.anel.add(self);
 
-        for (DatagramPacket hello : hellos) {
-            Packet p = new Packet(hello.getData(), hello.getLength());
+        for (Packet p : this.hellos) {
             System.out.printf("Processando: %s%n",p);
             if (p.tipo != 20)
             {
@@ -88,7 +75,7 @@ public class Ring implements Runnable{
             }
             else System.out.printf("Nome repetido no anel: %s%n",p.toString());
         }
-        socket.close();
+        
         // Temos que ordenar por ordem alfabética (testar e ver se funciona como esperado)
         this.anel.sort((x,y) -> x.origem.compareToIgnoreCase(y.origem));
 
@@ -115,11 +102,17 @@ public class Ring implements Runnable{
         socket.sendPacket(new DatagramPacket(Packet.token().getBytes(), Packet.token().getBytes().length));
     }
 
-    public void chegouUmHello() {}
+    public void chegouUmHello(Packet p) {
+        this.hellos.add(p);
+    }
 
     public void chegouToken() {}
 
     public void chegouMensagem() {}
+
+    public void chegouUmDiscover(Packet p) {
+        this.socket.sendBroadcast(new DatagramPacket(Packet.hello(nomeDaMaquina, selfIP).getBytes(), Packet.hello(nomeDaMaquina, selfIP).getBytes().length));
+    }
 
     public void novaMensagemParaEnviar(String mensagem) {}
 
