@@ -147,6 +147,7 @@ public class Ring implements Runnable{
         if (p.sequencia == proximaMensagemEsperada.get(p.origem)) {
             //Se for o esperado: imprimir o apelido da origem e a mensagem, avançar o contador esperado, marcar flag como ACK.
             Main.log(String.format("Mensagem de %s: %s%n",p.origem,p.mensagem));
+            System.out.printf("Mensagem recebida de %s: %s%n",p.origem,p.mensagem);
             proximaMensagemEsperada.put(p.origem, proximaMensagemEsperada.get(p.origem)+1);
         }
         //Se o número já foi recebido (duplicata): descartar o conteúdo, responder com ACK.
@@ -168,7 +169,8 @@ public class Ring implements Runnable{
         }
         else if (recebido.flag.equals("ACK")) {
             // exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token para o sucessor.
-            Main.log(String.format("Mensagem enviada para %s: %s%n",recebido.destino,recebido.mensagem));
+            Main.log(String.format("Mensagem enviada para %s com sucesso: %s%n",recebido.destino,recebido.mensagem));
+            System.out.printf("Mensagem enviada para %s com sucesso: %s%n",recebido.destino,recebido.mensagem);
         }
         else 
         {
