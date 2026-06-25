@@ -64,7 +64,7 @@ public class Ring implements Runnable{
             // Estamos sozinhos =(
             return false;
         }
-        
+
         new Thread(() -> {
             try {
                 Thread.sleep(10000);
@@ -81,7 +81,7 @@ public class Ring implements Runnable{
 
         ArrayList<Packet> toRemove = new ArrayList<>();
         for (Packet packet : anel) {
-            if (heartBeats.get(packet.origem) > System.currentTimeMillis() - 30000) {
+            if (heartBeats.get(packet.origem) < System.currentTimeMillis() - 30000) {
                 // Está morto
                 Main.log(String.format("Host removido por inatividade: %s%n", packet.origem));
                 toRemove.add(packet);
@@ -222,7 +222,7 @@ public class Ring implements Runnable{
         atualizarTopologia();
     }
 
-    public void atualizarTopologia()
+    public synchronized void atualizarTopologia()
     {
         Main.log(String.format("Atualizando Topologia%n"));
         this.anel = new ArrayList<>();
