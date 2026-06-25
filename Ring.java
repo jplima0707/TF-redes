@@ -26,6 +26,7 @@ public class Ring implements Runnable{
     private HashMap<String,Long> heartBeats;
     private Thread timeout;
     private long lastTokenTime;
+    private Object mutex = new Object();
 
 
     public Ring(Config conf, String ip, int port)
@@ -44,7 +45,8 @@ public class Ring implements Runnable{
 
     public synchronized boolean initialize() throws Exception
     {
-        this.hellos = new ArrayList<>();
+        Main.log("Começando inicializacao");
+        //this.hellos = new ArrayList<>();
         Packet p = new Packet();
         p.tipo = 20;
         p.origem = nomeDaMaquina;
@@ -65,14 +67,17 @@ public class Ring implements Runnable{
             return false;
         }
 
+        return true;
+    }
+
+    public synchronized void startHeartbeat()
+    {
         new Thread(() -> {
             try {
                 Thread.sleep(10000);
             } catch (InterruptedException e) {}
             Heatbeat();
         }).start();
-
-        return true;
     }
 
     private synchronized void Heatbeat()
@@ -80,15 +85,18 @@ public class Ring implements Runnable{
         this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
 
         ArrayList<Packet> toRemove = new ArrayList<>();
-        for (Packet packet : anel) {
-            if (heartBeats.get(packet.origem) < System.currentTimeMillis() - 30000) {
-                // Está morto
-                Main.log(String.format("Host removido por inatividade: %s%n", packet.origem));
-                toRemove.add(packet);
+        synchronized (mutex)
+        {
+            for (Packet packet : anel) {
+                if (heartBeats.get(packet.origem) > System.currentTimeMillis() - 30000) {
+                    // Está morto
+                    Main.log(String.format("Host removido por inatividade: %s%n", packet.origem));
+                    toRemove.add(packet);
+                }
             }
-        }
-        for (Packet packet : toRemove) {
-            this.anel.remove(packet);
+            for (Packet packet : toRemove) {
+                this.anel.remove(packet);
+            }
         }
         if (toRemove.size() > 0) {
             atualizarTopologia();
@@ -131,14 +139,14 @@ public class Ring implements Runnable{
         timeout.start();
     }
 
-    public void chegouUmHello(Packet p) {
+    public synchronized void chegouUmHello(Packet p) {
         Main.log("Chegou um hello");
         // Pode ser um heartbeat ou uma resposta a um Discover (durante execução)
         hellos.add(p);
         heartBeats.put(p.origem, System.currentTimeMillis());
     }
 
-    public void chegouToken() {
+    public synchronized void chegouToken() {
         Main.log("Chegou o token");
         this.lastTokenTime = System.currentTimeMillis();
         if (timeout != null)
@@ -167,7 +175,7 @@ public class Ring implements Runnable{
         // Agora temos que espera o ACK/NACK ou timeout, mas vai ser tratado nas outras funções
     }
 
-    public void chegouMensagem(Packet p) {
+    public synchronized void chegouMensagem(Packet p) {
         Main.log("Chegou uma mensagem");
         //  Se chegou aqui sabemos que é destinado pra essa máquina
         if (!p.valid) {
@@ -187,7 +195,7 @@ public class Ring implements Runnable{
                                    this.nextIP);        
     }
     
-    public void chegouResposta(Packet recebido) {
+    public synchronized void chegouResposta(Packet recebido) {
         Main.log("Chegou uma resposta");
         if (!recebido.valid || recebido.flag.equals("NAK")) {
             // a entrega falhou. Exibir mensagem na tela. Manter a mensagem na fila com o mesmo número de sequência e retransmitir na próxima passagem do token (encaminhar o token agora).
@@ -213,7 +221,7 @@ public class Ring implements Runnable{
         this.socket.sendPacket(Packet.token(),this.nextIP);
     }
 
-    public void chegouUmDiscover(Packet p) {
+    public synchronized void chegouUmDiscover(Packet p) {
         Main.log("Chegou um discover");
         this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
         // Tem que reconstruir a topologia incluindo essa nova máquina
@@ -265,6 +273,7 @@ public class Ring implements Runnable{
 
         this.nextIP = next.ipOrigem;
         this.prevIP = prev.ipOrigem;
+        
     }
 
     public boolean novaMensagemParaEnviar(String mensagem, String destino) 
