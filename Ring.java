@@ -168,8 +168,7 @@ public class Ring implements Runnable{
                 continue;
             }
             // Verifica se não é repetido - também impede nomes repetidos com ips diferentes, mas falha sileciosamente
-            System.out.println(p.origem);
-            if (this.anel.stream().noneMatch(x -> x.origem == p.origem)) {
+            if (this.anel.stream().noneMatch(x -> x.origem.equals(p.origem))) {
                 this.anel.add(p);
             }
             else System.out.printf("Nome repetido no anel: %s%n",p.toString());
@@ -180,7 +179,7 @@ public class Ring implements Runnable{
 
         for (Packet packet : anel) {
             // Pode dar problema se um host com nome X sair e outro com o mesmo nome X entrar depois
-            System.out.printf("%s ->",packet.origem);
+            System.out.printf("%s -> ",packet.origem);
             proximaMensagemEsperada.putIfAbsent(packet.origem, 0);
             heartBeats.putIfAbsent(packet.origem, System.currentTimeMillis());
         }
@@ -189,7 +188,7 @@ public class Ring implements Runnable{
         // Agora que sabemos o anel, podemos fazer os sockets corretamente pro próximo e anterior do anel
         Packet self = this.anel.stream().filter(x -> x.origem == this.nomeDaMaquina).findFirst().get();
         int selfIndex = this.anel.indexOf(self);
-        Packet next = this.anel.get(selfIndex+1 > this.anel.size() ? 0 : selfIndex+1);
+        Packet next = this.anel.get(selfIndex+1 >= this.anel.size() ? 0 : selfIndex+1);
         Packet prev = this.anel.get(selfIndex-1 < 0 ? this.anel.size() - 1 : selfIndex-1);
         
         this.nextIP = next.ipOrigem;
