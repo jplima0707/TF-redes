@@ -51,6 +51,8 @@ public class Packet {
                 this.crc = Long.parseLong(crcString);
                 break;
             case 2000:
+                this.destino = read(packet, i++, size);
+                i += this.destino.length();
                 this.flag = read(packet, i++, size);
                 i += this.flag.length();
                 String seq = read(packet, i++, size);

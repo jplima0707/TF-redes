@@ -100,12 +100,12 @@ public class Udp implements Runnable{
                         break;
                     case 2000:
                         // Analisa e encaminha o pacote pra frente
-                        if (recebido.destino == selfNome)
+                        if (recebido.destino.equals(selfNome))
                         {
                             // É pra essa máquina
                             this.ring.chegouMensagem(recebido);
                         }
-                        else if (recebido.origem == selfNome)
+                        else if (recebido.origem.equals(selfNome))
                         {
                             // É um ACK/NACK de uma mensagem dessa máquina
                             this.ring.chegouResposta(recebido);
