@@ -11,7 +11,7 @@ public class Main {
             Main.outputLog = new PrintWriter(new FileWriter("out.log", false), true);
 
             Config conf = new Config();
-            String ip = "192.168.0.69";
+            String ip = "192.168.0.74";
             int port = 6011;
 
             Ring ring = new Ring(conf, ip, port);

@@ -156,17 +156,17 @@ public class Ring implements Runnable{
     
     public void chegouResposta(Packet recebido) {
         Main.log("Chegou uma resposta");
-        if (!recebido.valid || recebido.flag == "NAK") {
+        if (!recebido.valid || recebido.flag.equals("NAK")) {
             // a entrega falhou. Exibir mensagem na tela. Manter a mensagem na fila com o mesmo número de sequência e retransmitir na próxima passagem do token (encaminhar o token agora).
             Main.log("Entrega falha ou ACK corrompido");
         }
-        else if (recebido.flag == "maquinainexistente") {
+        else if (recebido.flag.equals("maquinainexistente")) {
             // a máquina destino não existe ou está inativa. Exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token.
             Main.log("Máquina inexistente");
             this.listaMensagens.remove(0);
             
         }
-        else if (recebido.flag == "ACK") {
+        else if (recebido.flag.equals("ACK")) {
             // exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token para o sucessor.
             Main.log(String.format("Mensagem enviada para %s: %s%n",recebido.destino,recebido.mensagem));
         }

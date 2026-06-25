@@ -142,11 +142,11 @@ public class Packet {
         if (this.flag != null) {
             sb.append(":"+this.flag);
         }
-        if (this.ttl != Integer.MIN_VALUE) {
-            sb.append(":"+this.ttl);
-        }
         if (this.sequencia != Integer.MIN_VALUE) {
             sb.append(":"+this.sequencia);
+        }
+        if (this.ttl != Integer.MIN_VALUE) {
+            sb.append(":"+this.ttl);
         }
         if (this.mensagem != null) {
             sb.append(":"+this.mensagem);
