@@ -50,6 +50,11 @@ public class Ring implements Runnable{
     public synchronized boolean initialize() throws Exception
     {
         this.hellos = new ArrayList<>();
+        Packet p = new Packet();
+        p.tipo = 20;
+        p.origem = nomeDaMaquina;
+        p.ipOrigem = selfIP;
+        this.hellos.add(p);
         String pac = Packet.discover(this.nomeDaMaquina, this.selfIP);
         this.socket.sendBroadcast(pac);
         System.out.println(pac);
@@ -77,11 +82,14 @@ public class Ring implements Runnable{
     }
 
     public void chegouUmHello(Packet p) {
+        System.out.println("Chegou um hello");
         // Pode ser um heartbeat ou uma resposta a um Discover (durante execução)
+        hellos.add(p);
         heartBeats.put(p.origem, System.currentTimeMillis());
     }
 
     public void chegouToken() {
+        System.out.println("Chegou o token");
         try {
             Thread.sleep(this.delayDoToken);
         } catch (InterruptedException e) {}
@@ -98,6 +106,7 @@ public class Ring implements Runnable{
     }
 
     public void chegouMensagem(Packet p) {
+        System.out.println("Chegou uma mensagem");
         //  Se chegou aqui sabemos que é destinado pra essa máquina
         if (!p.valid) {
             // Se inválido, marcar a flag como NAK, recomputar o CRC e reenviar.
@@ -116,6 +125,7 @@ public class Ring implements Runnable{
     }
     
     public void chegouResposta(Packet recebido) {
+        System.out.println("Chegou uma resposta");
         if (!recebido.valid || recebido.flag == "NAK") {
             // a entrega falhou. Exibir mensagem na tela. Manter a mensagem na fila com o mesmo número de sequência e retransmitir na próxima passagem do token (encaminhar o token agora).
             System.out.println("Entrega falha ou ACK corrompido");
@@ -138,6 +148,7 @@ public class Ring implements Runnable{
     }
 
     public void chegouUmDiscover(Packet p) {
+        System.out.println("Chegou um discover");
         this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
         // Tem que reconstruir a topologia incluindo essa nova máquina
 

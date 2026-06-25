@@ -5,7 +5,7 @@ public class Main {
     public static void main(String[] args) throws Exception{
 
             Config conf = new Config();
-            String ip = "10.32.160.153";
+            String ip = "192.168.0.74";
             int port = 6011;
 
             Ring ring = new Ring(conf, ip, port);

@@ -6,7 +6,7 @@ public class Config {
     private int tempoMinimoToken;
 
     public Config(){
-        nomeDaMaquina = "A";
+        nomeDaMaquina = "B";
         delayDoToken = 300;
         probErro = 10;
         timeoutToken = 10;
