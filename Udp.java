@@ -51,10 +51,10 @@ public class Udp implements Runnable{
             }
         }
     }
-    public synchronized boolean sendBroadcast(DatagramPacket p)
+    public synchronized boolean sendBroadcast(String p)
     {
         try {
-            bcSocket.send(p);
+            bcSocket.send(new DatagramPacket(p.getBytes(), p.getBytes().length, InetAddress.getByName("255.255.255.255"),this.port));
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
@@ -63,10 +63,10 @@ public class Udp implements Runnable{
         return true;
     }
     // synchronized evita acesso simultâneo
-    public synchronized boolean sendPacket(DatagramPacket p)
+    public synchronized boolean sendPacket(String p, String ipDestino)
     {
         try {
-            outSocket.send(p);
+            outSocket.send(new DatagramPacket(p.getBytes(), p.getBytes().length,InetAddress.getByName(ipDestino),this.port));
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
@@ -85,11 +85,11 @@ public class Udp implements Runnable{
                 switch (recebido.tipo) {
                     case 10:
                         // Pede pra Thread principal enviar o hello e atualizar a topologia 
-                        //this.ring.chegouUmDiscover();
+                        this.ring.chegouUmDiscover(recebido);
                         break;
                     case 20:
                         // Heartbeat
-                        //this.ring.chegouUmHello();
+                        this.ring.chegouUmHello(recebido);
                         break;
                     case 1000:
                         // Avisa a Thread principal que pode enviar
@@ -100,22 +100,27 @@ public class Udp implements Runnable{
                         if (recebido.destino == selfNome)
                         {
                             // É pra essa máquina
-                            this.ring.chegouMensagem();
+                            this.ring.chegouMensagem(recebido);
+                        }
+                        else if (recebido.origem == selfNome)
+                        {
+                            // É um ACK/NACK de uma mensagem dessa máquina
+                            this.ring.chegouResposta(recebido);
                         }
                         else
                         {
                             // É para outra máquina
                             if (recebido.valid) {
                                 String toSend = Packet.data(recebido.origem, recebido.origem, recebido.flag, recebido.sequencia, recebido.ttl-1, recebido.mensagem);
-                                this.sendPacket(new DatagramPacket(toSend.getBytes(), toSend.getBytes().length));
+                                this.sendPacket(toSend,this.ring.getNextIP());
                             }
-                            // Se não é válido fazemos o que?
+                            // Se não é válido ele é descartado, então não fazemos nada
                         }
                     default:
                         break;
                 }
 
-            } catch (IOException e) {
+            } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
