@@ -11,7 +11,7 @@ public class Main {
             Main.outputLog = new PrintWriter(new FileWriter("out.log", false), true);
 
             Config conf = new Config();
-            String ip = "192.168.0.74";
+            String ip = "10.32.160.51";
             int port = 6011;
 
             Ring ring = new Ring(conf, ip, port);
@@ -52,7 +52,7 @@ public class Main {
             while (true) {
                 System.out.println("Escreva uma Mensagem:");
                 input = s.nextLine();
-                if (input == "quit") {
+                if (input.equalsIgnoreCase("quit")) {
                     break;
                 }
                 if (input.indexOf(':') != -1) {

@@ -222,7 +222,7 @@ public class Ring implements Runnable{
         Main.log(String.format("Topologia formada: %s%n", s.substring(0, s.length()-3)));
 
         // Agora que sabemos o anel, podemos fazer os sockets corretamente pro próximo e anterior do anel
-        Packet self = this.anel.stream().filter(x -> x.origem == this.nomeDaMaquina).findFirst().get();
+        Packet self = this.anel.stream().filter(x -> x.origem.equalsIgnoreCase(this.nomeDaMaquina)).findFirst().get();
         int selfIndex = this.anel.indexOf(self);
         Packet next = this.anel.get(selfIndex+1 >= this.anel.size() ? 0 : selfIndex+1);
         Packet prev = this.anel.get(selfIndex-1 < 0 ? this.anel.size() - 1 : selfIndex-1);
@@ -267,7 +267,7 @@ public class Ring implements Runnable{
     }
     public boolean isFirst()
     {
-        Packet self = this.anel.stream().filter(x -> x.origem == this.nomeDaMaquina).findFirst().get();
+        Packet self = this.anel.stream().filter(x -> x.origem.equalsIgnoreCase(this.nomeDaMaquina)).findFirst().get();
         return this.anel.indexOf(self) == 0;
     }
 
