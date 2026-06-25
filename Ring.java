@@ -1,10 +1,3 @@
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -59,13 +52,12 @@ public class Ring implements Runnable{
         this.hellos.add(p);
         String pac = Packet.discover(this.nomeDaMaquina, this.selfIP);
         this.socket.sendBroadcast(pac);
-        System.out.println(pac);
 
         long start_time = System.currentTimeMillis();
         while (System.currentTimeMillis() < start_time + 1000) {
             
         }
-
+        Main.log(String.format("Espera inicial terminada%n"));
         atualizarTopologia();
 
         if (this.anel.size() == 1) {
@@ -80,7 +72,7 @@ public class Ring implements Runnable{
     @Override
     public void run() {
         // Cuida do token (por enquanto só envia de início, mas tem que cuidar dos timeouts tbm)
-        System.out.println("Iniciando Token");
+        Main.log("Iniciando Token");
         this.socket.sendPacket(Packet.token(),this.nextIP);
         
         timeout = new Thread(() -> {
@@ -95,7 +87,7 @@ public class Ring implements Runnable{
     private synchronized void timeoutToken()
     {
         if (this.lastTokenTime + this.timeoutToken < System.currentTimeMillis()) {
-            System.out.println("TIMEOUT do Token, enviando novo");
+            Main.log("TIMEOUT do Token, enviando novo");
             this.socket.sendPacket(Packet.token(),this.nextIP);
         }
         timeout = new Thread(() -> {
@@ -108,14 +100,14 @@ public class Ring implements Runnable{
     }
 
     public void chegouUmHello(Packet p) {
-        System.out.println("Chegou um hello");
+        Main.log("Chegou um hello");
         // Pode ser um heartbeat ou uma resposta a um Discover (durante execução)
         hellos.add(p);
         heartBeats.put(p.origem, System.currentTimeMillis());
     }
 
     public void chegouToken() {
-        System.out.println("Chegou o token");
+        Main.log("Chegou o token");
         this.lastTokenTime = System.currentTimeMillis();
         if (timeout != null)
         {
@@ -144,7 +136,7 @@ public class Ring implements Runnable{
     }
 
     public void chegouMensagem(Packet p) {
-        System.out.println("Chegou uma mensagem");
+        Main.log("Chegou uma mensagem");
         //  Se chegou aqui sabemos que é destinado pra essa máquina
         if (!p.valid) {
             // Se inválido, marcar a flag como NAK, recomputar o CRC e reenviar.
@@ -154,7 +146,7 @@ public class Ring implements Runnable{
         // verificar o número de sequência. Cada máquina mantém o próximo número de sequência esperado para cada origem:
         if (p.sequencia == proximaMensagemEsperada.get(p.origem)) {
             //Se for o esperado: imprimir o apelido da origem e a mensagem, avançar o contador esperado, marcar flag como ACK.
-            System.out.printf("Mensagem de %s: %s%n",p.origem,p.mensagem);
+            Main.log(String.format("Mensagem de %s: %s%n",p.origem,p.mensagem));
             proximaMensagemEsperada.put(p.origem, proximaMensagemEsperada.get(p.origem)+1);
         }
         //Se o número já foi recebido (duplicata): descartar o conteúdo, responder com ACK.
@@ -163,31 +155,31 @@ public class Ring implements Runnable{
     }
     
     public void chegouResposta(Packet recebido) {
-        System.out.println("Chegou uma resposta");
+        Main.log("Chegou uma resposta");
         if (!recebido.valid || recebido.flag == "NAK") {
             // a entrega falhou. Exibir mensagem na tela. Manter a mensagem na fila com o mesmo número de sequência e retransmitir na próxima passagem do token (encaminhar o token agora).
-            System.out.println("Entrega falha ou ACK corrompido");
+            Main.log("Entrega falha ou ACK corrompido");
         }
         else if (recebido.flag == "maquinainexistente") {
             // a máquina destino não existe ou está inativa. Exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token.
-            System.out.println("Máquina inexistente");
+            Main.log("Máquina inexistente");
             this.listaMensagens.remove(0);
             
         }
         else if (recebido.flag == "ACK") {
             // exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token para o sucessor.
-            System.out.printf("Mensagem enviada para %s: %s%n",recebido.destino,recebido.mensagem);
+            Main.log(String.format("Mensagem enviada para %s: %s%n",recebido.destino,recebido.mensagem));
         }
         else 
         {
-            System.out.println("Algo está muito errado");
+            Main.log("Algo está muito errado em chegouResposta");
         }
-        System.out.println("Enviando Token");
+        Main.log("Enviando Token");
         this.socket.sendPacket(Packet.token(),this.nextIP);
     }
 
     public void chegouUmDiscover(Packet p) {
-        System.out.println("Chegou um discover");
+        Main.log("Chegou um discover");
         this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
         // Tem que reconstruir a topologia incluindo essa nova máquina
 
@@ -197,32 +189,34 @@ public class Ring implements Runnable{
 
     public void atualizarTopologia()
     {
+        Main.log(String.format("Atualizando Topologia%n"));
         this.anel = new ArrayList<>();
 
         for (Packet p : this.hellos) {
-            System.out.printf("Processando: %s%n",p);
+            Main.log(String.format("Processando pacote de topologia: %s%n",p));
             if (p.tipo != 20)
             {
-                System.out.println("Ignorando não Hello");
+                Main.log("Ignorando não Hello");
                 continue;
             }
             // Verifica se não é repetido - também impede nomes repetidos com ips diferentes, mas falha sileciosamente
             if (this.anel.stream().noneMatch(x -> x.origem.equals(p.origem))) {
                 this.anel.add(p);
             }
-            else System.out.printf("Nome repetido no anel: %s%n",p.toString());
+            else Main.log(String.format("Nome repetido no anel: %s%n",p.toString()));
         }
-        System.out.printf("Hosts encontrados: %d%n",this.anel.size());
+        Main.log(String.format("Quantidade de Hosts encontrados: %d%n",this.anel.size()));
         // Temos que ordenar por ordem alfabética (testar e ver se funciona como esperado)
         this.anel.sort((x,y) -> x.origem.compareToIgnoreCase(y.origem));
 
+        String s = "";
         for (Packet packet : anel) {
             // Pode dar problema se um host com nome X sair e outro com o mesmo nome X entrar depois
-            System.out.printf("%s -> ",packet.origem);
+            s += String.format("%s -> ",packet.origem);
             proximaMensagemEsperada.putIfAbsent(packet.origem, 0);
             heartBeats.putIfAbsent(packet.origem, System.currentTimeMillis());
         }
-        System.out.println();
+        Main.log(String.format("Topologia formada: %s%n", s.substring(0, s.length()-3)));
 
         // Agora que sabemos o anel, podemos fazer os sockets corretamente pro próximo e anterior do anel
         Packet self = this.anel.stream().filter(x -> x.origem == this.nomeDaMaquina).findFirst().get();
@@ -230,11 +224,37 @@ public class Ring implements Runnable{
         Packet next = this.anel.get(selfIndex+1 >= this.anel.size() ? 0 : selfIndex+1);
         Packet prev = this.anel.get(selfIndex-1 < 0 ? this.anel.size() - 1 : selfIndex-1);
         
+        Main.log(String.format("Host Anterior encontrados: %s%n",prev.origem));
+        Main.log(String.format("Host Próximo encontrados: %s%n",next.origem));
+
+
         this.nextIP = next.ipOrigem;
         this.prevIP = prev.ipOrigem;
     }
 
-    public void novaMensagemParaEnviar(String mensagem) {}
+    public boolean novaMensagemParaEnviar(String mensagem, String destino) 
+    {
+        Integer i = this.proximaMensagemEsperada.get(destino);
+        if (i == null) {
+            // Não existe o destino digitado
+            return false;
+        }
+        this.listaMensagens.add(new Mensagem(mensagem, destino, i));
+        this.proximaMensagemEsperada.put(destino, i+1);
+
+        return true;
+    }
+
+
+    public String getCurrentHosts()
+    {
+        String s = "";
+        for (Packet packet : anel) {
+            s += String.format("%s -> ",packet.origem);
+        }
+
+        return s.substring(0,s.length()-3);
+    }
 
     public String getPrevIP() {
         return prevIP;

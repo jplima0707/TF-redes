@@ -5,7 +5,7 @@ import java.net.InetAddress;
 
 public class Udp implements Runnable{
 
-    // Não fazer dois sockets diferentes
+    // Não fazer dois sockets diferentes (só referências diferentes pro mesmo socket)
     public DatagramSocket inSocket;
     public DatagramSocket outSocket;
     private DatagramSocket bcSocket;
@@ -34,25 +34,26 @@ public class Udp implements Runnable{
         this.port = port;
     }
 
-    public void initialize() throws Exception
-    {
-        DatagramPacket p = new DatagramPacket(new byte[255], 255);
-        while (true) {
-            bcSocket.receive(p);
-            Packet pa = new Packet(p.getData(), p.getLength());
-            switch (pa.tipo) {
-                case 10:
-                    ring.chegouUmDiscover(pa);
-                    break;
-                case 20:
-                    ring.chegouUmHello(pa);
-                default:
-                    break;
-            }
-        }
-    }
+    // public void initialize() throws Exception
+    // {
+    //     DatagramPacket p = new DatagramPacket(new byte[255], 255);
+    //     while (true) {
+    //         bcSocket.receive(p);
+    //         Packet pa = new Packet(p.getData(), p.getLength());
+    //         switch (pa.tipo) {
+    //             case 10:
+    //                 ring.chegouUmDiscover(pa);
+    //                 break;
+    //             case 20:
+    //                 ring.chegouUmHello(pa);
+    //             default:
+    //                 break;
+    //         }
+    //     }
+    // }
     public synchronized boolean sendBroadcast(String p)
     {
+        Main.log(String.format("Enviando broadcast: %s%n",p));
         try {
             bcSocket.send(new DatagramPacket(p.getBytes(), p.getBytes().length, InetAddress.getByName("255.255.255.255"),this.port));
         } catch (IOException e) {
@@ -65,7 +66,8 @@ public class Udp implements Runnable{
     // synchronized evita acesso simultâneo
     public synchronized boolean sendPacket(String p, String ipDestino)
     {
-        try {
+        Main.log(String.format("Enviando pacote: %s para %s%n",p,ipDestino));
+        try {   
             outSocket.send(new DatagramPacket(p.getBytes(), p.getBytes().length,InetAddress.getByName(ipDestino),this.port));
         } catch (IOException e) {
             // TODO Auto-generated catch block
@@ -82,7 +84,7 @@ public class Udp implements Runnable{
             try {
                 inSocket.receive(p);
                 Packet recebido = new Packet(p.getData(),p.getLength());
-                System.out.printf("Pacote recebido tipo %d%n",recebido.tipo);
+                Main.log(String.format("Pacote recebido: %s%n",recebido.toString()));
                 switch (recebido.tipo) {
                     case 10:
                         // Pede pra Thread principal enviar o hello e atualizar a topologia 
