@@ -114,7 +114,7 @@ public class Udp implements Runnable{
                         {
                             // É para outra máquina
                             if (recebido.valid) {
-                                String toSend = Packet.data(recebido.origem, recebido.origem, recebido.flag, recebido.sequencia, recebido.ttl-1, recebido.mensagem);
+                                String toSend = Packet.data(recebido.origem, recebido.destino, recebido.flag, recebido.sequencia, recebido.ttl-1, recebido.mensagem);
                                 this.sendPacket(toSend,this.ring.getNextIP());
                             }
                             // Se não é válido ele é descartado, então não fazemos nada

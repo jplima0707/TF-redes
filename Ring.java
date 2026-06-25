@@ -26,7 +26,7 @@ public class Ring implements Runnable{
     private HashMap<String,Long> heartBeats;
     private Thread timeout;
     private long lastTokenTime;
-    private Object mutex = new Object();
+    private volatile boolean duplicata = false;
 
 
     public Ring(Config conf, String ip, int port)
@@ -85,18 +85,16 @@ public class Ring implements Runnable{
         this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
 
         ArrayList<Packet> toRemove = new ArrayList<>();
-        synchronized (mutex)
-        {
-            for (Packet packet : anel) {
-                if (heartBeats.get(packet.origem) > System.currentTimeMillis() - 30000) {
-                    // Está morto
-                    Main.log(String.format("Host removido por inatividade: %s%n", packet.origem));
-                    toRemove.add(packet);
-                }
+
+        for (Packet packet : anel) {
+            if (heartBeats.get(packet.origem) > System.currentTimeMillis() - 30000) {
+                // Está morto
+                Main.log(String.format("Host removido por inatividade: %s%n", packet.origem));
+                toRemove.add(packet);
             }
-            for (Packet packet : toRemove) {
-                this.anel.remove(packet);
-            }
+        }
+        for (Packet packet : toRemove) {
+            this.anel.remove(packet);
         }
         if (toRemove.size() > 0) {
             atualizarTopologia();
@@ -129,6 +127,10 @@ public class Ring implements Runnable{
         if (this.lastTokenTime + this.timeoutToken < System.currentTimeMillis()) {
             Main.log("TIMEOUT do Token, enviando novo");
             this.socket.sendPacket(Packet.token(),this.nextIP);
+        }
+        if (this.lastTokenTime + this.tempoMinimoToken > System.currentTimeMillis()) {
+            Main.log("Token Duplicado, removendo");
+            this.duplicata = true;
         }
         timeout = new Thread(() -> {
             try {
@@ -166,6 +168,10 @@ public class Ring implements Runnable{
         if (this.listaMensagens.isEmpty()) {
 
             //Só passa o token pra frente depois de esperar o delay do Token
+            if (this.duplicata) {
+                this.duplicata = false;
+                return;
+            }
             this.socket.sendPacket(Packet.token(),this.nextIP);
             return;
         }
