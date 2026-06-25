@@ -14,7 +14,7 @@ public class Main {
             Udp network = new Udp(port, conf.getNome(), ring);
             ring.setSocket(network);
             Thread t = new Thread(() -> {try {
-                network.initialize();
+                network.run();
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();

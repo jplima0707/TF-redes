@@ -94,7 +94,7 @@ public class Ring implements Runnable{
 
     private synchronized void timeoutToken()
     {
-        if (this.lastTokenTime < System.currentTimeMillis() + this.timeoutToken) {
+        if (this.lastTokenTime + this.timeoutToken < System.currentTimeMillis()) {
             System.out.println("TIMEOUT do Token, enviando novo");
             this.socket.sendPacket(Packet.token(),this.nextIP);
         }
