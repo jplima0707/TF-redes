@@ -64,11 +64,43 @@ public class Ring implements Runnable{
             // Estamos sozinhos =(
             return false;
         }
-
+        
+        new Thread(() -> {
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {}
+            Heatbeat();
+        }).start();
 
         return true;
     }
 
+    private synchronized void Heatbeat()
+    {
+        this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
+
+        ArrayList<Packet> toRemove = new ArrayList<>();
+        for (Packet packet : anel) {
+            if (heartBeats.get(packet.origem) > System.currentTimeMillis() - 30000) {
+                // Está morto
+                Main.log(String.format("Host removido por inatividade: %s%n", packet.origem));
+                toRemove.add(packet);
+            }
+        }
+        for (Packet packet : toRemove) {
+            this.anel.remove(packet);
+        }
+        if (toRemove.size() > 0) {
+            atualizarTopologia();
+        }
+
+        new Thread(() -> {
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {}
+            Heatbeat();
+        }).start();
+    }
     @Override
     public void run() {
         // Cuida do token (por enquanto só envia de início, mas tem que cuidar dos timeouts tbm)
