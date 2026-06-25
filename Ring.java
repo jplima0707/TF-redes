@@ -171,6 +171,7 @@ public class Ring implements Runnable{
             // exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token para o sucessor.
             Main.log(String.format("Mensagem enviada para %s com sucesso: %s%n",recebido.destino,recebido.mensagem));
             System.out.printf("Mensagem enviada para %s com sucesso: %s%n",recebido.destino,recebido.mensagem);
+            this.listaMensagens.remove(0);
         }
         else 
         {
