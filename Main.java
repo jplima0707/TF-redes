@@ -30,7 +30,13 @@ public class Main {
                     Thread.currentThread().interrupt();
                 }
             }
-            t.interrupt();
+            //t.interrupt();
+            Thread token;
+            
+            if (ring.isFirst()) {
+                token = new Thread(() -> {ring.run();});
+                token.start();
+            }
             
             //Em algum lugar, tem que mandar o heartbeat de 10 em 10 segundos
 

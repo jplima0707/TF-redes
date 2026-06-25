@@ -31,6 +31,8 @@ public class Ring implements Runnable{
     private List<Mensagem> listaMensagens;
     private HashMap<String,Integer> proximaMensagemEsperada;
     private HashMap<String,Long> heartBeats;
+    private Thread timeout;
+    private long lastTokenTime;
 
 
     public Ring(Config conf, String ip, int port)
@@ -78,7 +80,31 @@ public class Ring implements Runnable{
     @Override
     public void run() {
         // Cuida do token (por enquanto só envia de início, mas tem que cuidar dos timeouts tbm)
+        System.out.println("Iniciando Token");
         this.socket.sendPacket(Packet.token(),this.nextIP);
+        
+        timeout = new Thread(() -> {
+            try {
+                Thread.sleep(this.timeoutToken);
+            } catch (InterruptedException e) { }
+            timeoutToken();
+        });
+        timeout.start();
+    }
+
+    private synchronized void timeoutToken()
+    {
+        if (this.lastTokenTime < System.currentTimeMillis() + this.timeoutToken) {
+            System.out.println("TIMEOUT do Token, enviando novo");
+            this.socket.sendPacket(Packet.token(),this.nextIP);
+        }
+        timeout = new Thread(() -> {
+            try {
+                Thread.sleep(this.timeoutToken);
+            } catch (InterruptedException e) { }
+            timeoutToken();
+        });
+        timeout.start();
     }
 
     public void chegouUmHello(Packet p) {
@@ -90,6 +116,18 @@ public class Ring implements Runnable{
 
     public void chegouToken() {
         System.out.println("Chegou o token");
+        this.lastTokenTime = System.currentTimeMillis();
+        if (timeout != null)
+        {
+            timeout.interrupt();
+            timeout = new Thread(() -> {
+                try {
+                    Thread.sleep(this.timeoutToken);
+                } catch (InterruptedException e) { }
+                timeoutToken();
+            });
+            timeout.start();
+        }
         try {
             Thread.sleep(this.delayDoToken);
         } catch (InterruptedException e) {}
@@ -144,6 +182,7 @@ public class Ring implements Runnable{
         {
             System.out.println("Algo está muito errado");
         }
+        System.out.println("Enviando Token");
         this.socket.sendPacket(Packet.token(),this.nextIP);
     }
 

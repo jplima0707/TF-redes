@@ -24,7 +24,7 @@ public class Packet {
             if ((char)b == ':') break;
             tipoString += (char) b;
         }
-        System.out.println(tipoString);
+        //System.out.println(tipoString);
         this.tipo = Integer.parseInt(tipoString);
 
         if (this.tipo == 1000)

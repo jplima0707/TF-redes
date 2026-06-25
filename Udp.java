@@ -82,6 +82,7 @@ public class Udp implements Runnable{
             try {
                 inSocket.receive(p);
                 Packet recebido = new Packet(p.getData(),p.getLength());
+                System.out.printf("Pacote recebido tipo %d%n",recebido.tipo);
                 switch (recebido.tipo) {
                     case 10:
                         // Pede pra Thread principal enviar o hello e atualizar a topologia 
