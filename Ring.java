@@ -1,324 +1,477 @@
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
-import java.util.List;
+import java.util.Map;
 
+// Mantem o estado do anel e as decisoes de encaminhamento.
+public class Ring implements Runnable {
+    private static final int HEARTBEAT_INTERVAL_MS = 10000;
+    private static final int HOST_TIMEOUT_MS = 30000;
+    private static final int MAX_FILA = 10;
 
-// Se aqui vai ser mantido o estado do anel, quase todos métodos vão ter que ser syncronized
-public class Ring implements Runnable{
-    private String nomeDaMaquina;
-    private int delayDoToken;
-    private int timeoutToken;
-    private int tempoMinimoToken;
-    private String selfIP;
-    private int port;
-    private ArrayList<Packet> hellos = new ArrayList<>();
+    private final String nomeDaMaquina;
+    private final int delayDoToken;
+    private final int timeoutToken;
+    private final int tempoMinimoToken;
+    private final double probErro;
+    private final String selfIP;
+    private final int port;
+    private final Map<String, Packet> hostsConhecidos;
+    private final LinkedList<Mensagem> listaMensagens;
+    private final HashMap<String, Integer> proximaMensagemEsperada;
+    private final HashMap<String, Long> heartBeats;
 
-    // Parâmetros calculados na inicialização
     private String nextIP;
-    private String prevIP; 
-    private List<Packet> anel;
+    private String prevIP;
+    private LinkedList<Packet> anel;
     private Udp socket;
+    private Thread timeoutThread;
+    private Thread heartbeatThread;
+    private boolean heartbeatAtivo;
+    private boolean souControladora;
+    private int proximaSequenciaLocal;
+    private long lastTokenSeenTime;
+    private long lastTokenTimeoutBaseTime;
 
-    // Parâmetros da execução do loop
-    private List<Mensagem> listaMensagens;
-    private HashMap<String,Integer> proximaMensagemEsperada;
-    private HashMap<String,Long> heartBeats;
-    private Thread timeout;
-    private long lastTokenTime;
-    private volatile boolean duplicata = false;
-
-
-    public Ring(Config conf, String ip, int port)
-    {
+    public Ring(Config conf, String ip, int port) {
         this.nomeDaMaquina = conf.getNome();
         this.delayDoToken = conf.getDelayToken();
         this.timeoutToken = conf.getTimeoutToken();
         this.tempoMinimoToken = conf.getTempoMinimoToken();
+        this.probErro = conf.getProbabilidadeErro();
         this.selfIP = ip;
         this.port = port;
-        this.listaMensagens = new ArrayList<>();
+        this.hostsConhecidos = new LinkedHashMap<>();
+        this.listaMensagens = new LinkedList<>();
         this.anel = new LinkedList<>();
         this.proximaMensagemEsperada = new HashMap<>();
         this.heartBeats = new HashMap<>();
+        this.lastTokenSeenTime = Long.MIN_VALUE;
+        this.lastTokenTimeoutBaseTime = Long.MIN_VALUE;
     }
 
-    public synchronized boolean initialize() throws Exception
-    {
+    public synchronized boolean initialize() {
         Main.log("Começando inicializacao");
-        //this.hellos = new ArrayList<>();
-        Packet p = new Packet();
-        p.tipo = 20;
-        p.origem = nomeDaMaquina;
-        p.ipOrigem = selfIP;
-        this.hellos.add(p);
-        String pac = Packet.discover(this.nomeDaMaquina, this.selfIP);
-        this.socket.sendBroadcast(pac);
+        registrarHostLocal();
+        startHeartbeat();
+        this.socket.sendBroadcast(Packet.discover(this.nomeDaMaquina, this.selfIP));
 
-        long start_time = System.currentTimeMillis();
-        while (System.currentTimeMillis() < start_time + 1000) {
-            
-        }
-        Main.log(String.format("Espera inicial terminada%n"));
-        atualizarTopologia();
-
-        if (this.anel.size() == 1) {
-            // Estamos sozinhos =(
-            return false;
-        }
-
-        return true;
-    }
-
-    public synchronized void startHeartbeat()
-    {
-        new Thread(() -> {
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() < startTime + 1000) {
             try {
-                Thread.sleep(10000);
-            } catch (InterruptedException e) {}
-            Heatbeat();
-        }).start();
-    }
-
-    private synchronized void Heatbeat()
-    {
-        this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
-
-        ArrayList<Packet> toRemove = new ArrayList<>();
-
-        for (Packet packet : anel) {
-            if (heartBeats.get(packet.origem) > System.currentTimeMillis() - 30000) {
-                // Está morto
-                Main.log(String.format("Host removido por inatividade: %s%n", packet.origem));
-                toRemove.add(packet);
+                wait(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
-        for (Packet packet : toRemove) {
-            this.anel.remove(packet);
+
+        atualizarTopologia();
+        return this.anel.size() > 1;
+    }
+
+    private void registrarHostLocal() {
+        Packet self = new Packet();
+        self.tipo = 20;
+        self.origem = this.nomeDaMaquina;
+        self.ipOrigem = this.selfIP;
+        self.valid = true;
+        this.hostsConhecidos.put(this.nomeDaMaquina, self);
+        this.heartBeats.put(this.nomeDaMaquina, System.currentTimeMillis());
+        this.proximaMensagemEsperada.putIfAbsent(this.nomeDaMaquina, 0);
+    }
+
+    public synchronized void startHeartbeat() {
+        if (this.heartbeatAtivo) {
+            return;
         }
-        if (toRemove.size() > 0) {
+        this.heartbeatAtivo = true;
+        this.heartbeatThread = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(HEARTBEAT_INTERVAL_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                enviarHeartbeat();
+            }
+        }, "heartbeat-" + this.nomeDaMaquina);
+        this.heartbeatThread.setDaemon(true);
+        this.heartbeatThread.start();
+    }
+
+    private synchronized void enviarHeartbeat() {
+        this.socket.sendBroadcast(Packet.hello(this.nomeDaMaquina, this.selfIP));
+        removerHostsInativos();
+    }
+
+    private void removerHostsInativos() {
+        long agora = System.currentTimeMillis();
+        boolean mudou = false;
+        ArrayList<String> removidos = new ArrayList<>();
+
+        for (Map.Entry<String, Long> entry : this.heartBeats.entrySet()) {
+            String host = entry.getKey();
+            if (host.equals(this.nomeDaMaquina)) {
+                continue;
+            }
+            if (agora - entry.getValue() >= HOST_TIMEOUT_MS) {
+                removidos.add(host);
+            }
+        }
+
+        for (String host : removidos) {
+            Main.log("Host removido por inatividade: " + host);
+            this.heartBeats.remove(host);
+            this.hostsConhecidos.remove(host);
+            this.proximaMensagemEsperada.remove(host);
+            mudou = true;
+        }
+
+        if (mudou) {
             atualizarTopologia();
         }
-
-        new Thread(() -> {
-            try {
-                Thread.sleep(10000);
-            } catch (InterruptedException e) {}
-            Heatbeat();
-        }).start();
     }
+
     @Override
-    public void run() {
-        // Cuida do token (por enquanto só envia de início, mas tem que cuidar dos timeouts tbm)
-        Main.log("Iniciando Token");
-        this.socket.sendPacket(Packet.token(),this.nextIP);
-        
-        timeout = new Thread(() -> {
-            try {
-                Thread.sleep(this.timeoutToken);
-            } catch (InterruptedException e) { }
-            timeoutToken();
-        });
-        timeout.start();
+    public synchronized void run() {
+        atualizarTopologia();
     }
 
-    private synchronized void timeoutToken()
-    {
-        if (this.lastTokenTime + this.timeoutToken < System.currentTimeMillis()) {
-            Main.log("TIMEOUT do Token, enviando novo");
-            this.socket.sendPacket(Packet.token(),this.nextIP);
+    private synchronized void timeoutToken() {
+        if (!this.souControladora || this.anel.size() < 2) {
+            return;
         }
-        if (this.lastTokenTime + this.tempoMinimoToken > System.currentTimeMillis()) {
-            Main.log("Token Duplicado, removendo");
-            this.duplicata = true;
+
+        long agora = System.currentTimeMillis();
+        long expiracao = this.lastTokenTimeoutBaseTime + this.timeoutToken;
+        if (this.lastTokenTimeoutBaseTime == Long.MIN_VALUE || agora >= expiracao) {
+            Main.log("TIMEOUT do token, gerando novo token");
+            enviarToken("timeout");
+            return;
         }
-        timeout = new Thread(() -> {
+
+        agendarTimeoutToken(expiracao - agora);
+    }
+
+    private void agendarTimeoutToken(long atraso) {
+        if (this.timeoutThread != null) {
+            this.timeoutThread.interrupt();
+        }
+
+        this.timeoutThread = new Thread(() -> {
             try {
-                Thread.sleep(this.timeoutToken);
-            } catch (InterruptedException e) { }
+                Thread.sleep(Math.max(1L, atraso));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
             timeoutToken();
-        });
-        timeout.start();
+        }, "token-timeout-" + this.nomeDaMaquina);
+        this.timeoutThread.setDaemon(true);
+        this.timeoutThread.start();
+    }
+
+    private void cancelarTimeoutToken() {
+        if (this.timeoutThread != null) {
+            this.timeoutThread.interrupt();
+            this.timeoutThread = null;
+        }
+    }
+
+    private void atualizarEstadoControladora() {
+        boolean eraControladora = this.souControladora;
+        boolean agoraSouControladora = isFirst();
+
+        this.souControladora = agoraSouControladora;
+
+        if (agoraSouControladora && !eraControladora) {
+            Main.log("Assumindo controle do token");
+            if (this.anel.size() > 1) {
+                enviarToken("nova-controladora");
+            }
+        } else if (!agoraSouControladora && eraControladora) {
+            Main.log("Deixando de ser controladora");
+            cancelarTimeoutToken();
+        } else if (agoraSouControladora && this.anel.size() < 2) {
+            cancelarTimeoutToken();
+        }
+    }
+
+    private void enviarToken(String motivo) {
+        if (this.nextIP == null || this.anel.size() < 2) {
+            return;
+        }
+        Main.log("Enviando token (" + motivo + ") para " + this.nextIP);
+        if (this.souControladora) {
+            this.lastTokenTimeoutBaseTime = System.currentTimeMillis();
+        }
+        this.socket.sendPacket(Packet.token(), this.nextIP);
+        if (this.souControladora) {
+            agendarTimeoutToken(this.timeoutToken);
+        }
+    }
+
+    private void encaminharTokenOuMensagem() {
+        try {
+            Thread.sleep(this.delayDoToken);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        if (this.listaMensagens.isEmpty()) {
+            enviarToken("passagem-normal");
+            return;
+        }
+
+        Mensagem mensagem = this.listaMensagens.peekFirst();
+        int ttlInicial = Math.max(2, this.anel.size() * 2);
+        String pacote = Packet.data(
+            this.nomeDaMaquina,
+            mensagem.destino,
+            "maquinainexistente",
+            mensagem.indice,
+            ttlInicial,
+            mensagem.texto
+        );
+
+        if (deveCorromperPacote()) {
+            pacote = corromperMensagem(pacote);
+        }
+
+        Main.log("Enviando mensagem para " + mensagem.destino + " com sequencia " + mensagem.indice);
+        this.socket.sendPacket(pacote, this.nextIP);
+    }
+
+    private boolean deveCorromperPacote() {
+        return Math.random() < this.probErro;
+    }
+
+    private String corromperMensagem(String pacote) {
+        String[] partes = pacote.split(":", 8);
+        if (partes.length != 8) {
+            return pacote;
+        }
+        String mensagemOriginal = partes[6];
+        if (mensagemOriginal.isEmpty()) {
+            partes[6] = "X";
+        } else {
+            char primeiro = mensagemOriginal.charAt(0);
+            char substituto = primeiro == 'X' ? 'Y' : 'X';
+            partes[6] = substituto + mensagemOriginal.substring(1);
+        }
+        return String.join(":", partes);
     }
 
     public synchronized void chegouUmHello(Packet p) {
-        Main.log("Chegou um hello");
-        // Pode ser um heartbeat ou uma resposta a um Discover (durante execução)
-        hellos.add(p);
-        heartBeats.put(p.origem, System.currentTimeMillis());
+        if (!p.valid || p.origem == null || p.ipOrigem == null) {
+            Main.log("HELLO invalido descartado");
+            return;
+        }
+
+        Packet anterior = this.hostsConhecidos.get(p.origem);
+        this.hostsConhecidos.put(p.origem, p);
+        this.heartBeats.put(p.origem, System.currentTimeMillis());
+        this.proximaMensagemEsperada.putIfAbsent(p.origem, 0);
+
+        boolean mudou = anterior == null || !anterior.ipOrigem.equals(p.ipOrigem);
+        if (mudou) {
+            Main.log("HELLO adicionou/atualizou host " + p.origem);
+            atualizarTopologia();
+        }
+        notifyAll();
     }
 
     public synchronized void chegouToken() {
-        Main.log("Chegou o token");
-        this.lastTokenTime = System.currentTimeMillis();
-        if (timeout != null)
-        {
-            timeout.interrupt();
-            timeout = new Thread(() -> {
-                try {
-                    Thread.sleep(this.timeoutToken);
-                } catch (InterruptedException e) { }
-                timeoutToken();
-            });
-            timeout.start();
-        }
-        try {
-            Thread.sleep(this.delayDoToken);
-        } catch (InterruptedException e) {}
-        if (this.listaMensagens.isEmpty()) {
-
-            //Só passa o token pra frente depois de esperar o delay do Token
-            if (this.duplicata) {
-                this.duplicata = false;
-                return;
-            }
-            this.socket.sendPacket(Packet.token(),this.nextIP);
+        if (this.anel.size() < 2) {
             return;
         }
-        // Começamos a mandar uma mensagem
-        Mensagem m = this.listaMensagens.getFirst();
-        this.socket.sendPacket(Packet.data(this.nomeDaMaquina, m.destino, "maquinainexistente", m.indice, this.anel.size()*2, m.texto), nextIP);
-        // Agora temos que espera o ACK/NACK ou timeout, mas vai ser tratado nas outras funções
+
+        long agora = System.currentTimeMillis();
+        if (this.souControladora) {
+            if (this.lastTokenSeenTime != Long.MIN_VALUE && agora - this.lastTokenSeenTime < this.tempoMinimoToken) {
+                Main.log("Token duplicado detectado e descartado");
+                return;
+            }
+            this.lastTokenSeenTime = agora;
+            this.lastTokenTimeoutBaseTime = agora;
+            agendarTimeoutToken(this.timeoutToken);
+        }
+
+        Main.log("Chegou o token");
+        encaminharTokenOuMensagem();
     }
 
     public synchronized void chegouMensagem(Packet p) {
-        Main.log("Chegou uma mensagem");
-        //  Se chegou aqui sabemos que é destinado pra essa máquina
+        Main.log("Chegou uma mensagem destinada a esta maquina");
+
         if (!p.valid) {
-            // Se inválido, marcar a flag como NAK, recomputar o CRC e reenviar.
-            this.socket.sendPacket(Packet.data(p.origem,p.destino,"NAK",p.sequencia,this.anel.size()*2,p.mensagem),
-                                   this.nextIP);
+            this.socket.sendPacket(
+                Packet.data(p.origem, p.destino, "NAK", p.sequencia, ttlResetado(), p.mensagem),
+                this.nextIP
+            );
+            return;
         }
-        // verificar o número de sequência. Cada máquina mantém o próximo número de sequência esperado para cada origem:
-        if (p.sequencia == proximaMensagemEsperada.get(p.origem)) {
-            //Se for o esperado: imprimir o apelido da origem e a mensagem, avançar o contador esperado, marcar flag como ACK.
-            Main.log(String.format("Mensagem de %s: %s%n",p.origem,p.mensagem));
-            System.out.printf("Mensagem recebida de %s: %s%n",p.origem,p.mensagem);
-            proximaMensagemEsperada.put(p.origem, proximaMensagemEsperada.get(p.origem)+1);
+
+        int esperado = this.proximaMensagemEsperada.getOrDefault(p.origem, 0);
+        String flagResposta = "ACK";
+
+        if (p.sequencia == esperado) {
+            Main.log("Mensagem de " + p.origem + ": " + p.mensagem);
+            System.out.printf("Mensagem recebida de %s: %s%n", p.origem, p.mensagem);
+            this.proximaMensagemEsperada.put(p.origem, esperado + 1);
+        } else if (p.sequencia > esperado) {
+            flagResposta = "NAK";
         }
-        //Se o número já foi recebido (duplicata): descartar o conteúdo, responder com ACK.
-        this.socket.sendPacket(Packet.data(p.origem,p.destino,"ACK",p.sequencia,this.anel.size()*2,p.mensagem),
-                                   this.nextIP);        
+
+        this.socket.sendPacket(
+            Packet.data(p.origem, p.destino, flagResposta, p.sequencia, ttlResetado(), p.mensagem),
+            this.nextIP
+        );
     }
-    
+
     public synchronized void chegouResposta(Packet recebido) {
         Main.log("Chegou uma resposta");
-        if (!recebido.valid || recebido.flag.equals("NAK")) {
-            // a entrega falhou. Exibir mensagem na tela. Manter a mensagem na fila com o mesmo número de sequência e retransmitir na próxima passagem do token (encaminhar o token agora).
-            Main.log("Entrega falha ou ACK corrompido");
+
+        if (!recebido.valid || "NAK".equals(recebido.flag)) {
+            Main.log("Entrega falhou, mensagem permanece na fila");
+        } else if ("maquinainexistente".equals(recebido.flag)) {
+            Main.log("Maquina inexistente/inativa: " + recebido.destino);
+            if (!this.listaMensagens.isEmpty()) {
+                this.listaMensagens.removeFirst();
+            }
+        } else if ("ACK".equals(recebido.flag)) {
+            Main.log("Mensagem enviada para " + recebido.destino + " com sucesso: " + recebido.mensagem);
+            System.out.printf("Mensagem enviada para %s com sucesso: %s%n", recebido.destino, recebido.mensagem);
+            if (!this.listaMensagens.isEmpty()) {
+                this.listaMensagens.removeFirst();
+            }
+        } else {
+            Main.log("Flag de resposta desconhecida: " + recebido.flag);
         }
-        else if (recebido.flag.equals("maquinainexistente")) {
-            // a máquina destino não existe ou está inativa. Exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token.
-            Main.log("Máquina inexistente");
-            this.listaMensagens.remove(0);
-            
+
+        enviarToken("fim-resposta");
+    }
+
+    public synchronized void encaminharMensagem(Packet recebido) {
+        if (!recebido.valid) {
+            Main.log("Pacote de dados com CRC invalido descartado");
+            return;
         }
-        else if (recebido.flag.equals("ACK")) {
-            // exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token para o sucessor.
-            Main.log(String.format("Mensagem enviada para %s com sucesso: %s%n",recebido.destino,recebido.mensagem));
-            System.out.printf("Mensagem enviada para %s com sucesso: %s%n",recebido.destino,recebido.mensagem);
-            this.listaMensagens.remove(0);
+        if (recebido.ttl <= 0) {
+            Main.log("Pacote descartado por TTL esgotado");
+            return;
         }
-        else 
-        {
-            Main.log("Algo está muito errado em chegouResposta");
-        }
-        Main.log("Enviando Token");
-        this.socket.sendPacket(Packet.token(),this.nextIP);
+
+        String toSend = Packet.data(
+            recebido.origem,
+            recebido.destino,
+            recebido.flag,
+            recebido.sequencia,
+            recebido.ttl - 1,
+            recebido.mensagem
+        );
+        this.socket.sendPacket(toSend, this.nextIP);
     }
 
     public synchronized void chegouUmDiscover(Packet p) {
         Main.log("Chegou um discover");
-        this.socket.sendBroadcast(Packet.hello(nomeDaMaquina, selfIP));
-        // Tem que reconstruir a topologia incluindo essa nova máquina
-
-        this.hellos.add(p);
-        atualizarTopologia();
+        this.socket.sendBroadcast(Packet.hello(this.nomeDaMaquina, this.selfIP));
     }
 
-    public synchronized void atualizarTopologia()
-    {
-        Main.log(String.format("Atualizando Topologia%n"));
-        this.anel = new ArrayList<>();
+    public synchronized void atualizarTopologia() {
+        registrarHostLocal();
 
-        for (Packet p : this.hellos) {
-            Main.log(String.format("Processando pacote de topologia: %s%n",p));
-            if (p.tipo != 20)
-            {
-                Main.log("Ignorando não Hello");
-                continue;
-            }
-            // Verifica se não é repetido - também impede nomes repetidos com ips diferentes, mas falha sileciosamente
-            if (this.anel.stream().noneMatch(x -> x.origem.equals(p.origem))) {
-                this.anel.add(p);
-            }
-            else Main.log(String.format("Nome repetido no anel: %s%n",p.toString()));
+        this.anel = new LinkedList<>(this.hostsConhecidos.values());
+        this.anel.sort((x, y) -> x.origem.compareToIgnoreCase(y.origem));
+
+        if (this.anel.isEmpty()) {
+            this.nextIP = null;
+            this.prevIP = null;
+            return;
         }
-        Main.log(String.format("Quantidade de Hosts encontrados: %d%n",this.anel.size()));
-        // Temos que ordenar por ordem alfabética (testar e ver se funciona como esperado)
-        this.anel.sort((x,y) -> x.origem.compareToIgnoreCase(y.origem));
 
-        String s = "";
-        for (Packet packet : anel) {
-            // Pode dar problema se um host com nome X sair e outro com o mesmo nome X entrar depois
-            s += String.format("%s -> ",packet.origem);
-            proximaMensagemEsperada.putIfAbsent(packet.origem, 0);
-            heartBeats.putIfAbsent(packet.origem, System.currentTimeMillis());
+        for (Packet packet : this.anel) {
+            this.proximaMensagemEsperada.putIfAbsent(packet.origem, 0);
         }
-        Main.log(String.format("Topologia formada: %s%n", s.substring(0, s.length()-3)));
 
-        // Agora que sabemos o anel, podemos fazer os sockets corretamente pro próximo e anterior do anel
-        Packet self = this.anel.stream().filter(x -> x.origem.equalsIgnoreCase(this.nomeDaMaquina)).findFirst().get();
+        Packet self = null;
+        for (Packet packet : this.anel) {
+            if (packet.origem.equalsIgnoreCase(this.nomeDaMaquina)) {
+                self = packet;
+                break;
+            }
+        }
+
+        if (self == null) {
+            return;
+        }
+
         int selfIndex = this.anel.indexOf(self);
-        Packet next = this.anel.get(selfIndex+1 >= this.anel.size() ? 0 : selfIndex+1);
-        Packet prev = this.anel.get(selfIndex-1 < 0 ? this.anel.size() - 1 : selfIndex-1);
-        
-        Main.log(String.format("Host Anterior encontrados: %s%n",prev.origem));
-        Main.log(String.format("Host Próximo encontrados: %s%n",next.origem));
-
+        Packet next = this.anel.get((selfIndex + 1) % this.anel.size());
+        Packet prev = this.anel.get((selfIndex - 1 + this.anel.size()) % this.anel.size());
 
         this.nextIP = next.ipOrigem;
         this.prevIP = prev.ipOrigem;
-        
+
+        Main.log("Topologia formada: " + getCurrentHosts());
+        Main.log("Host anterior: " + prev.origem);
+        Main.log("Host proximo: " + next.origem);
+
+        atualizarEstadoControladora();
     }
 
-    public boolean novaMensagemParaEnviar(String mensagem, String destino) 
-    {
-        Integer i = this.proximaMensagemEsperada.get(destino);
-        if (i == null) {
-            // Não existe o destino digitado
+    private int ttlResetado() {
+        return Math.max(2, this.anel.size() * 2);
+    }
+
+    public synchronized boolean novaMensagemParaEnviar(String mensagem, String destino) {
+        if (mensagem == null || mensagem.isBlank() || destino == null || destino.isBlank()) {
             return false;
         }
-        this.listaMensagens.add(new Mensagem(mensagem, destino, i));
-        this.proximaMensagemEsperada.put(destino, i+1);
+        if (this.listaMensagens.size() >= MAX_FILA) {
+            Main.log("Fila cheia, mensagem descartada");
+            return false;
+        }
 
+        this.listaMensagens.add(new Mensagem(mensagem, destino, this.proximaSequenciaLocal));
+        this.proximaSequenciaLocal++;
         return true;
     }
 
-
-    public String getCurrentHosts()
-    {
-        String s = "";
-        for (Packet packet : anel) {
-            s += String.format("%s -> ",packet.origem);
+    public synchronized String getCurrentHosts() {
+        if (this.anel.isEmpty()) {
+            return "(nenhum)";
         }
 
-        return s.substring(0,s.length()-3);
+        StringBuilder builder = new StringBuilder();
+        for (Packet packet : this.anel) {
+            if (builder.length() > 0) {
+                builder.append(" -> ");
+            }
+            builder.append(packet.origem);
+        }
+        return builder.toString();
     }
 
-    public String getPrevIP() {
-        return prevIP;
-    }
-    public String getNextIP() {
-        return nextIP;
-    }
-    public boolean isFirst()
-    {
-        Packet self = this.anel.stream().filter(x -> x.origem.equalsIgnoreCase(this.nomeDaMaquina)).findFirst().get();
-        return this.anel.indexOf(self) == 0;
+    public synchronized String getPrevIP() {
+        return this.prevIP;
     }
 
-    public void setSocket(Udp socket) {
+    public synchronized String getNextIP() {
+        return this.nextIP;
+    }
+
+    public synchronized boolean isFirst() {
+        if (this.anel.isEmpty()) {
+            return false;
+        }
+        return this.anel.get(0).origem.equalsIgnoreCase(this.nomeDaMaquina);
+    }
+
+    public synchronized void setSocket(Udp socket) {
         this.socket = socket;
     }
 }

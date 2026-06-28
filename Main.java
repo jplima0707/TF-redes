@@ -37,14 +37,9 @@ public class Main {
                 }
             }
             //t.interrupt();
-            Thread token;
-            
-            if (ring.isFirst()) {
-                token = new Thread(() -> {ring.run();});
-                token.start();
-            }
-            
-            //Em algum lugar, tem que mandar o heartbeat de 10 em 10 segundos
+            Thread token = new Thread(() -> {ring.run();});
+            token.start();
+            ring.startHeartbeat();
 
             //Recebe input do terminal
             String input = "";

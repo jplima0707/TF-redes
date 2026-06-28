@@ -8,7 +8,7 @@ public class Config {
     public Config(){
         nomeDaMaquina = "B";
         delayDoToken = 100;
-        probErro = 10;
+        probErro = 0.10;
         timeoutToken = 1000;
         tempoMinimoToken = 2;
     }
@@ -19,7 +19,7 @@ public class Config {
         }
         nomeDaMaquina = nome;
         delayDoToken = delay;
-        probErro = probErroBase100/100;
+        probErro = probErroBase100 / 100.0;
         timeoutToken = timeout;
         tempoMinimoToken = tempoMinimo;
     }

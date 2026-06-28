@@ -1,8 +1,8 @@
 import java.util.zip.CRC32;
 
 public class Packet {
-    
-    public int tipo;
+
+    public int tipo = -1;
     public String origem;
     public String destino;
     public String ipOrigem;
@@ -15,17 +15,29 @@ public class Packet {
 
     public Packet(){}
 
-    public Packet(byte[] packet, int size)
-    {
+    public Packet(byte[] packet, int size) {
+        if (packet == null || size <= 0) {
+            this.valid = false;
+            return;
+        }
+
         int i = 0;
         String tipoString = "";
-        for (byte b : packet) {
-            i++;
-            if ((char)b == ':') break;
-            tipoString += (char) b;
+        while (i < size) {
+            char c = (char) packet[i++];
+            if (c == ':') {
+                break;
+            }
+            tipoString += c;
         }
-        //System.out.println(tipoString);
-        this.tipo = Integer.parseInt(tipoString);
+
+        try {
+            this.tipo = Integer.parseInt(tipoString);
+        } catch (NumberFormatException e) {
+            this.valid = false;
+            this.tipo = -1;
+            return;
+        }
 
         if (this.tipo == 1000)
         {
@@ -35,40 +47,43 @@ public class Packet {
 
 
         this.origem = read(packet, i++, size);
-        i += origem.length();
+        i += this.origem.length();
 
         int indexCRC = -1;
 
-        switch (this.tipo) {
-            case 10:    
-            case 20:
-                this.ipOrigem = read(packet, i++, size);
-                i += this.ipOrigem.length();
+        try {
+            switch (this.tipo) {
+                case 10:
+                case 20:
+                    this.ipOrigem = read(packet, i++, size);
+                    i += this.ipOrigem.length();
                 if (this.tipo == 10) {this.valid = true; return;}
-                indexCRC = i;
-                String crcString = read(packet, i++, size);
-                i += crcString.length();
-                this.crc = Long.parseLong(crcString);
-                break;
-            case 2000:
-                this.destino = read(packet, i++, size);
-                i += this.destino.length();
-                this.flag = read(packet, i++, size);
-                i += this.flag.length();
-                String seq = read(packet, i++, size);
-                i += seq.length();
-                this.sequencia = Integer.parseInt(seq);
-                String ttlString = read(packet, i++, size);
-                i += ttlString.length();
-                this.ttl = Integer.parseInt(ttlString);
-                this.mensagem = read(packet, i++, size);
-                i += this.mensagem.length();
-                indexCRC = i;
-                String crcString2 = read(packet, i++, size);
-                i += crcString2.length();
-                this.crc = Long.parseLong(crcString2);
-                break;
+                    indexCRC = i;
+                    this.crc = Long.parseLong(read(packet, i++, size));
+                    break;
+                case 2000:
+                    this.destino = read(packet, i++, size);
+                    i += this.destino.length();
+                    this.flag = read(packet, i++, size);
+                    i += this.flag.length();
+                    this.sequencia = Integer.parseInt(read(packet, i++, size));
+                    String ttlString = read(packet, i++, size);
+                    i += ttlString.length();
+                    this.ttl = Integer.parseInt(ttlString);
+                    this.mensagem = read(packet, i++, size);
+                    i += this.mensagem.length();
+                    indexCRC = i;
+                    this.crc = Long.parseLong(read(packet, i++, size));
+                    break;
+                default:
+                    this.valid = false;
+                    return;
+            }
+        } catch (NumberFormatException e) {
+            this.valid = false;
+            return;
         }
+
         CRC32 crc32 = new CRC32();
         crc32.update(packet, 0, indexCRC);
         
@@ -78,8 +93,7 @@ public class Packet {
     public static String read(byte[] packet, int start, int max)
     {
         String out = "";
-        while (true) {
-            if (start == max) break;
+        while (start < max) {
             byte b = packet[start++];
             if ((char)b == ':') break;
             out += (char)b;
@@ -116,14 +130,6 @@ public class Packet {
     public static byte[] toBytes(Packet packet)
     {        
         return packet.toString().getBytes();
-    }
-
-    public static void main(String[] args) {
-        Packet p = new Packet("1000".getBytes(),"1000".getBytes().length);
-        System.out.println(Packet.discover("A", "192.168.0.1"));
-        System.out.println(Packet.hello("B", "10.32.143.21"));
-        System.out.println(Packet.token());
-        System.out.println(Packet.data("A", "B", "maquinainexistente", 0, 8, "Oi"));
     }
 
     @Override

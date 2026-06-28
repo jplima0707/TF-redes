@@ -1,0 +1,193 @@
+<div style="text-align: justify">
+<h1 id="fundamentos-de-redes-de-computadores">Fundamentos de Redes de Computadores</h1>
+<img src="https://www.politecnica.pucrs.br/bs/imgs/escola-politecnica.png" width="385">
+<h1 id="definição-do-trabalho-final">Definição do Trabalho Final</h1>
+<p>A definição do trabalho consiste em implementar uma aplicação que simula o funcionamento de uma rede local em anel. A aplicação deverá implementar a transmissão de mensagens entre as máquinas que compõem o anel, utilizando o protocolo UDP como transporte.</p>
+<p>A topologia em anel é construída a partir de uma lista ordenada de máquinas ativas em ordem alfabética de apelido. Cada máquina identifica seu sucessor como o próximo elemento da lista, com comportamento circular (o último conecta-se ao primeiro). Um <em>token</em> circula pelo anel controlando quem pode transmitir: somente a máquina que detém o token pode enviar dados.</p>
+<p>O programa possui três tipos de pacotes: <strong>controle</strong> (DISCOVER e HELLO), <em><strong>token</strong></em> e <strong>dados</strong>.</p>
+<p>Toda a comunicação utiliza UDP na <strong>porta 6000</strong>: broadcast para DISCOVER e HELLO; unicast para token e dados.</p>
+<hr>
+<h2 id="arquivo-de-configuração">Arquivo de configuração</h2>
+<p>Ao iniciar, o programa lê um arquivo de configuração cujo formato fica a critério do grupo, desde que contenha:</p>
+<ul>
+<li><strong>Apelido da máquina</strong> (letras A, B, C...);</li>
+<li><strong>Delay do token e dos dados</strong> — tempo de espera antes de enviar uma mensagem ou passar o token, para controlar artificialmente o ritmo da rede;</li>
+<li><strong>Probabilidade de inserção de erro</strong> — probabilidade com que o módulo de falhas corrompe mensagens antes do envio;</li>
+<li><strong>Timeout do token</strong> — tempo máximo sem o token passar pela controladora antes de gerar um novo;</li>
+<li><strong>Tempo mínimo entre tokens</strong> — intervalo mínimo entre passagens do token pela controladora; passagens abaixo desse intervalo indicam token duplicado.</li>
+</ul>
+<hr>
+<h2 id="formato-dos-pacotes">Formato dos pacotes</h2>
+<h3 id="discover">DISCOVER</h3>
+<pre class="hljs"><code><div>10:&lt;apelido da origem&gt;:&lt;endereço IP da origem&gt;
+</div></code></pre>
+<p>Exemplo: <code>10:A:10.32.143.20</code></p>
+<h3 id="hello">HELLO</h3>
+<pre class="hljs"><code><div>20:&lt;apelido da origem&gt;:&lt;endereço IP da origem&gt;:&lt;CRC32&gt;
+</div></code></pre>
+<p>Exemplo: <code>20:B:10.32.143.21:48291734</code></p>
+<p>O CRC32 é calculado com o campo CRC vazio (terminado em <code>:</code>):</p>
+<pre class="hljs"><code><div>20:B:10.32.143.21:
+</div></code></pre>
+<p>HELLOs com CRC inválido são descartados silenciosamente. Os parâmetros do CRC32 são os mesmos definidos na seção de pacote de dados.</p>
+<h3 id="token">Token</h3>
+<pre class="hljs"><code><div>1000
+</div></code></pre>
+<p>Um pacote com tipo <code>1000</code> que contenha campos adicionais (separados por <code>:</code>) <strong>não deve ser tratado como token</strong> e deve ser descartado imediatamente. Isso protege contra corrupção do tipo de pacote de dados (<code>2000</code> → <code>1000</code>): o descarte no primeiro salto dispara o timeout do token na controladora.</p>
+<h3 id="pacote-de-dados">Pacote de dados</h3>
+<pre class="hljs"><code><div>2000:&lt;origem&gt;:&lt;destino&gt;:&lt;flag&gt;:&lt;número de sequência&gt;:&lt;TTL&gt;:&lt;mensagem&gt;:&lt;CRC32&gt;
+</div></code></pre>
+<p>Exemplo: <code>2000:B:A:maquinainexistente:42:8:Oi pessoal!:19385749</code></p>
+<p><strong>Campos:</strong></p>
+<ul>
+<li><strong>flag</strong>: estado do pacote. Valores possíveis: <code>maquinainexistente</code>, <code>ACK</code>, <code>NAK</code>.</li>
+<li><strong>número de sequência</strong>: inteiro incremental por máquina de origem, iniciando em 0 e incrementado a cada nova mensagem. Permanece fixo durante toda a circulação, inclusive em retransmissões por NAK.</li>
+<li><strong>TTL</strong> (<em>time to live</em>): número máximo de saltos restantes. A origem define o TTL como o <strong>dobro do número de máquinas no anel</strong> (cobre ida e volta). Cada salto intermediário decrementa o TTL em 1. O destino, ao alterar a flag para ACK ou NAK, reseta o TTL para o dobro do número de máquinas que conhece. Pacote com TTL igual a 0 é descartado, disparando o timeout do token.</li>
+<li><strong>CRC32</strong>: calculado com o campo CRC vazio (terminado em <code>:</code>). Cobre todos os campos anteriores: tipo, origem, destino, flag, número de sequência, TTL e mensagem.</li>
+</ul>
+<p><strong>Atenção:</strong> a mensagem e o apelido não podem conter dois pontos.</p>
+<p><strong>Verificação do CRC em todo salto:</strong> toda máquina que recebe um pacote de dados deve verificar o CRC antes de encaminhar. CRC inválido → descartar imediatamente (dispara timeout do token). Ao modificar qualquer campo (flag ou TTL), a máquina deve recomputar o CRC antes de reenviar.</p>
+<p><strong>Parâmetros do CRC32:</strong> deve-se utilizar o padrão <strong>CRC32/ISO-HDLC</strong> (também conhecido como CRC32b): polinômio <code>0xEDB88320</code> (forma refletida), seed inicial <code>0xFFFFFFFF</code>, XOR final <code>0xFFFFFFFF</code>, com reflexão de entrada e saída. Este é o comportamento padrão de <code>binascii.crc32</code> (Python), <code>java.util.zip.CRC32</code> (Java) e <code>crc32</code> via zlib (C). O resultado deve ser expresso como inteiro decimal sem sinal de 32 bits.</p>
+<hr>
+<h2 id="inicialização-do-anel">Inicialização do anel</h2>
+<p>Ao iniciar, a aplicação envia <strong>DISCOVER</strong> em broadcast se identificando. Toda máquina que receber um DISCOVER responde com <strong>HELLO</strong> em broadcast.</p>
+<p>A máquina aguarda <strong>1 segundo</strong> após enviar o DISCOVER para coletar HELLOs. Ao fim desse período, constrói a lista de máquinas em ordem alfabética e determina seu sucessor. A <strong>primeira máquina em ordem alfabética</strong> gera o token inicial e passa a ser a <strong>controladora do token</strong> (responsável pelo timeout e pelo tempo mínimo).</p>
+<p>Caso nenhum HELLO seja recebido dentro de 10 segundos, o DISCOVER é reenviado. Se a máquina estiver sozinha (nenhum HELLO recebido em 1 segundo), ela aguarda a entrada de outra máquina sem gerar token.</p>
+<p><strong>Heartbeat:</strong> cada máquina reenvia seu HELLO a cada <strong>10 segundos</strong>. Se uma máquina ficar <strong>30 segundos</strong> (3 ciclos) sem receber um HELLO válido de um host conhecido, esse host é considerado inativo e removido do anel. O anel é reconstruído automaticamente com os hosts restantes — nenhum protocolo explícito de saída é necessário.</p>
+<hr>
+<h2 id="funcionamento-do-anel">Funcionamento do anel</h2>
+<h3 id="circulação-do-token">Circulação do token</h3>
+<p>Ao receber o token, a máquina verifica sua fila de mensagens:</p>
+<ul>
+<li><strong>Fila vazia</strong>: encaminha o token para o sucessor.</li>
+<li><strong>Fila com mensagens</strong>: retira a primeira mensagem da fila, envia o pacote de dados para o sucessor e <strong>aguarda o retorno</strong> antes de encaminhar o token.</li>
+</ul>
+<h3 id="envio-de-dados">Envio de dados</h3>
+<p>O pacote de dados parte da origem com a flag <code>maquinainexistente</code>. Cada máquina intermediária verifica o CRC, decrementa o TTL, recomputa o CRC e encaminha para o sucessor. A máquina destino processa o pacote e o reenvia com flag <code>ACK</code> ou <code>NAK</code>. O pacote percorre o restante do anel até voltar à origem.</p>
+<h3 id="no-destino">No destino</h3>
+<p>Ao identificar que o pacote é endereçado a ela:</p>
+<ol>
+<li>Verificar o CRC. Se inválido, marcar a flag como <strong>NAK</strong>, recomputar o CRC e reenviar.</li>
+<li>Se o CRC for válido, verificar o número de sequência. Cada máquina mantém o próximo número de sequência esperado para cada origem:
+<ul>
+<li>Se o número já foi recebido (duplicata): descartar o conteúdo, responder com <strong>ACK</strong>.</li>
+<li>Se for o esperado: imprimir o apelido da origem e a mensagem, avançar o contador esperado, marcar flag como <strong>ACK</strong>.</li>
+</ul>
+</li>
+<li>Resetar o TTL para o dobro do número de máquinas conhecidas, recomputar o CRC e encaminhar para o sucessor.</li>
+</ol>
+<h3 id="na-origem">Na origem</h3>
+<p>Ao receber o pacote de volta (campo <code>origem</code> igual ao próprio apelido), revalidar o CRC. CRC inválido é tratado como <strong>NAK</strong>.</p>
+<ul>
+<li><strong>ACK</strong>: exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token para o sucessor.</li>
+<li><strong>maquinainexistente</strong>: a máquina destino não existe ou está inativa. Exibir mensagem na tela, retirar a mensagem da fila, encaminhar o token.</li>
+<li><strong>NAK</strong>: a entrega falhou. Exibir mensagem na tela. Manter a mensagem na fila com o mesmo número de sequência e retransmitir na próxima passagem do token (encaminhar o token agora).</li>
+</ul>
+<hr>
+<h2 id="módulo-de-inserção-de-falhas">Módulo de inserção de falhas</h2>
+<p>Antes de enviar um pacote de dados, a máquina pode corromper artificialmente a mensagem com probabilidade configurável (definida no arquivo de configuração). A corrupção altera o conteúdo da mensagem, tornando o CRC inválido no receptor. O CRC é sempre inserido <strong>após</strong> a possível corrupção.</p>
+<hr>
+<h2 id="fila-de-mensagens">Fila de mensagens</h2>
+<p>Cada máquina mantém uma fila de até <strong>10 mensagens</strong>. O usuário enfileira mensagens via terminal (stdin) durante a execução, informando o apelido do destino e o conteúdo. Mensagens são enviadas em ordem FIFO e só são removidas da fila após confirmação (ACK ou <code>maquinainexistente</code>).</p>
+<hr>
+<h2 id="controle-do-token">Controle do token</h2>
+<p>A controladora do token (a máquina com menor apelido alfabético no anel) monitora dois problemas:</p>
+<ul>
+<li><strong>Token perdido</strong> — o token não passa pela controladora dentro do <em>timeout</em> configurado: um novo token é gerado.</li>
+<li><strong>Token duplicado</strong> — o token passa em intervalo menor que o tempo mínimo configurado: o token extra é descartado.</li>
+</ul>
+<p>Quando uma nova máquina com apelido anterior ao da controladora atual entra no anel, ela assume o controle: gera um novo token e passa a monitorar timeout e tempo mínimo. A controladora anterior cessa o monitoramento imediatamente ao perceber a troca. O mecanismo de tempo mínimo da nova controladora descarta o token duplicado automaticamente.</p>
+<hr>
+<h2 id="alteração-topológica-do-anel">Alteração topológica do anel</h2>
+<p>O anel pode ser reconfigurado durante a execução sem reinicialização.</p>
+<p><strong>Entrada de nova máquina:</strong> a nova máquina envia DISCOVER em broadcast e aguarda 1 segundo pelos HELLOs. Todas as máquinas que recebem o DISCOVER respondem com HELLO e reconstroem o encadeamento do anel em ordem alfabética com base nos hosts conhecidos. A nova máquina só começa a encaminhar pacotes após esse período de espera.</p>
+<p><strong>Saída de máquina:</strong> detectada automaticamente pelo mecanismo de heartbeat (30 segundos sem HELLO válido). O anel é reconstruído com os hosts restantes sem nenhuma ação adicional.</p>
+<hr>
+<h2 id="avaliação">Avaliação</h2>
+<p><strong>A demonstração deverá acontecer, no mínimo, em 3 máquinas.</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Critério</th>
+<th>Descrição</th>
+<th style="text-align:right">Peso</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Inicialização do anel</strong></td>
+<td>DISCOVER/HELLO via broadcast, formação da topologia em ordem alfabética, geração do token inicial</td>
+<td style="text-align:right">10%</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Funcionamento básico do anel</strong></td>
+<td>Circulação do token, envio e retorno de pacotes de dados, fila de mensagens (até 10)</td>
+<td style="text-align:right">15%</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>CRC32</strong></td>
+<td>Cálculo e inserção do CRC na origem, verificação em todo salto, resposta com ACK/NAK/maquinainexistente</td>
+<td style="text-align:right">15%</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Módulo de inserção de falhas</strong></td>
+<td>Inserção aleatória de erros com probabilidade configurável, retransmissão na próxima passagem do token</td>
+<td style="text-align:right">10%</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Controle do token</strong></td>
+<td>Detecção de token perdido (timeout → gerar novo) e de token duplicado (tempo mínimo → retirar)</td>
+<td style="text-align:right">15%</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Alteração topológica</strong></td>
+<td>Entrada e saída de máquinas durante execução sem reinicialização, reconfiguração via DISCOVER/HELLO/heartbeat</td>
+<td style="text-align:right">10%</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Observabilidade</strong></td>
+<td>Visualização em tempo real da posição do token e pacotes; logs de ACK/NAK/retransmissão/token perdido/duplicado</td>
+<td style="text-align:right">5%</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Relatório</strong></td>
+<td>Estruturas de dados, threads, sincronização, CRC, exemplos de execução, código comentado</td>
+<td style="text-align:right">20%</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total</strong></td>
+<td></td>
+<td style="text-align:right"><strong>100%</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Atenção:</strong> O formato dos pacotes (DISCOVER, HELLO, token, dados) deve ser seguido fielmente, pois grupos diferentes se comunicarão durante a apresentação.</p>
+</blockquote>
+<hr>
+<h2 id="regras-gerais">Regras Gerais</h2>
+<p><strong>Grupos:</strong> Até 3 componentes. Informar no Moodle.</p>
+<p><strong>Data de entrega:</strong> <strong>30/06</strong> antes do início da aula <br>
+<strong>Data de apresentação:</strong> <strong>30/06</strong> <br>
+<strong>Data de teste de interoperabilidade:</strong> <strong>02/07</strong> <br></p>
+<p>Obs.: Todos os participantes devem estar presentes</p>
+<p><strong>Entrega final:</strong></p>
+<ul>
+<li>Relatório descrevendo a estrutura da solução dada, envolvendo estruturas de dados, threads, classes, mecanismos de sincronização utilizados, CRC, exemplos de execução, etc.</li>
+<li>Código fonte comentado.</li>
+</ul>
+<p><strong>IMPORTANTE</strong>: Não serão aceitos trabalhos entregues fora do prazo. Trabalhos que não compilam ou que não executam não serão avaliados. Todos os trabalhos serão analisados e comparados. Caso seja identificada cópia de trabalhos, todos os trabalhos envolvidos receberão nota ZERO.</p>
+
+
+
+</div>
