@@ -122,9 +122,14 @@ public class Packet {
     public static String data(String origem, String destino, String flag, int numSequencia, int TTL, String mensagem)
     {
         CRC32 crc = new CRC32();
-        String s = "2000:"+origem.trim()+":"+destino.trim()+":"+flag.trim()+":"+numSequencia+":"+TTL+":"+mensagem.trim()+":";
+        String s = "2000:"+campo(origem)+":"+campo(destino)+":"+campo(flag)+":"+numSequencia+":"+TTL+":"+campo(mensagem)+":";
         crc.update(s.getBytes());
         return s+crc.getValue();
+    }
+
+    private static String campo(String valor)
+    {
+        return valor == null ? "" : valor.trim();
     }
 
     public static byte[] toBytes(Packet packet)
