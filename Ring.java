@@ -317,6 +317,10 @@ public class Ring implements Runnable {
         Main.log("Chegou uma mensagem destinada a esta maquina");
 
         if (!p.valid) {
+            if (p.origem == null || p.destino == null || p.sequencia == Integer.MIN_VALUE || this.nextIP == null) {
+                Main.log("Pacote invalido sem campos suficientes para NAK descartado");
+                return;
+            }
             this.socket.sendPacket(
                 Packet.data(p.origem, p.destino, "NAK", p.sequencia, ttlResetado(), p.mensagem),
                 this.nextIP

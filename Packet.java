@@ -21,59 +21,57 @@ public class Packet {
             return;
         }
 
-        int i = 0;
-        String tipoString = "";
-        while (i < size) {
-            char c = (char) packet[i++];
-            if (c == ':') {
-                break;
-            }
-            tipoString += c;
-        }
+        String raw = new String(packet, 0, size);
+        String[] fields = raw.split(":", -1);
 
         try {
-            this.tipo = Integer.parseInt(tipoString);
+            this.tipo = Integer.parseInt(fields[0]);
         } catch (NumberFormatException e) {
             this.valid = false;
             this.tipo = -1;
             return;
         }
 
-        if (this.tipo == 1000)
-        {
-            this.valid = i == size;
+        if (this.tipo == 1000) {
+            this.valid = fields.length == 1;
             return;
         }
-
-
-        this.origem = read(packet, i++, size);
-        i += this.origem.length();
-
-        int indexCRC = -1;
 
         try {
             switch (this.tipo) {
                 case 10:
+                    if (fields.length != 3) {
+                        this.valid = false;
+                        return;
+                    }
+                    this.origem = fields[1];
+                    this.ipOrigem = fields[2];
+                    this.valid = true;
+                    break;
                 case 20:
-                    this.ipOrigem = read(packet, i++, size);
-                    i += this.ipOrigem.length();
-                if (this.tipo == 10) {this.valid = true; return;}
-                    indexCRC = i;
-                    this.crc = Long.parseLong(read(packet, i++, size));
+                    if (fields.length != 4) {
+                        this.valid = false;
+                        return;
+                    }
+                    this.origem = fields[1];
+                    this.ipOrigem = fields[2];
+                    this.crc = Long.parseLong(fields[3]);
+                    this.valid = crc32("20:" + this.origem + ":" + this.ipOrigem + ":") == this.crc;
                     break;
                 case 2000:
-                    this.destino = read(packet, i++, size);
-                    i += this.destino.length();
-                    this.flag = read(packet, i++, size);
-                    i += this.flag.length();
-                    this.sequencia = Integer.parseInt(read(packet, i++, size));
-                    String ttlString = read(packet, i++, size);
-                    i += ttlString.length();
-                    this.ttl = Integer.parseInt(ttlString);
-                    this.mensagem = read(packet, i++, size);
-                    i += this.mensagem.length();
-                    indexCRC = i;
-                    this.crc = Long.parseLong(read(packet, i++, size));
+                    if (fields.length != 8) {
+                        preencherDadosParciais(fields);
+                        this.valid = false;
+                        return;
+                    }
+                    this.origem = fields[1];
+                    this.destino = fields[2];
+                    this.flag = fields[3];
+                    this.sequencia = Integer.parseInt(fields[4]);
+                    this.ttl = Integer.parseInt(fields[5]);
+                    this.mensagem = fields[6];
+                    this.crc = Long.parseLong(fields[7]);
+                    this.valid = crc32("2000:" + this.origem + ":" + this.destino + ":" + this.flag + ":" + this.sequencia + ":" + this.ttl + ":" + this.mensagem + ":") == this.crc;
                     break;
                 default:
                     this.valid = false;
@@ -81,13 +79,7 @@ public class Packet {
             }
         } catch (NumberFormatException e) {
             this.valid = false;
-            return;
         }
-
-        CRC32 crc32 = new CRC32();
-        crc32.update(packet, 0, indexCRC);
-        
-        this.valid = crc32.getValue() == this.crc;
     }
 
     public static String read(byte[] packet, int start, int max)
@@ -108,10 +100,8 @@ public class Packet {
 
     public static String hello(String origem, String origemIP)
     {
-        CRC32 crc = new CRC32();
         String s = "20:"+origem.trim()+":"+origemIP.trim()+":";
-        crc.update(s.getBytes());
-        return s+crc.getValue();
+        return s+crc32(s);
     }
 
     public static String token()
@@ -121,15 +111,34 @@ public class Packet {
 
     public static String data(String origem, String destino, String flag, int numSequencia, int TTL, String mensagem)
     {
-        CRC32 crc = new CRC32();
         String s = "2000:"+campo(origem)+":"+campo(destino)+":"+campo(flag)+":"+numSequencia+":"+TTL+":"+campo(mensagem)+":";
-        crc.update(s.getBytes());
-        return s+crc.getValue();
+        return s+crc32(s);
     }
 
     private static String campo(String valor)
     {
         return valor == null ? "" : valor.trim();
+    }
+
+    private void preencherDadosParciais(String[] fields)
+    {
+        if (fields.length > 1) this.origem = fields[1];
+        if (fields.length > 2) this.destino = fields[2];
+        if (fields.length > 3) this.flag = fields[3];
+        if (fields.length > 4) {
+            try {
+                this.sequencia = Integer.parseInt(fields[4]);
+            } catch (NumberFormatException e) {
+                this.sequencia = Integer.MIN_VALUE;
+            }
+        }
+    }
+
+    private static long crc32(String value)
+    {
+        CRC32 crc = new CRC32();
+        crc.update(value.getBytes());
+        return crc.getValue();
     }
 
     public static byte[] toBytes(Packet packet)

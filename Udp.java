@@ -66,8 +66,9 @@ public class Udp implements Runnable {
             try {
                 p.setLength(buffer.length);
                 inSocket.receive(p);
+                String raw = new String(p.getData(), 0, p.getLength());
                 Packet recebido = new Packet(p.getData(), p.getLength());
-                Main.log(String.format("Pacote recebido: %s%n", recebido.toString()));
+                Main.log(String.format("Pacote recebido bruto: %s | interpretado: %s | valido=%s%n", raw, recebido.toString(), recebido.valid));
 
                 switch (recebido.tipo) {
                     case 10:
@@ -84,6 +85,10 @@ public class Udp implements Runnable {
                         }
                         break;
                     case 2000:
+                        if (recebido.origem == null || recebido.destino == null) {
+                            Main.log("Pacote de dados malformado descartado");
+                            break;
+                        }
                         if (recebido.destino.equalsIgnoreCase(selfNome)) {
                             this.ring.chegouMensagem(recebido);
                         } else if (recebido.origem.equalsIgnoreCase(selfNome)) {
