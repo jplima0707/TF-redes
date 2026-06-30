@@ -32,6 +32,9 @@ public class Ring implements Runnable {
     private boolean souControladora;
     private int tamanhoAnteriorAnel;
     private int proximaSequenciaLocal;
+    private boolean aguardandoResposta;
+    private int sequenciaAguardandoResposta;
+    private long inicioEsperaResposta;
     private long lastTokenSeenTime;
     private long lastTokenTimeoutBaseTime;
 
@@ -49,6 +52,9 @@ public class Ring implements Runnable {
         this.proximaMensagemEsperada = new HashMap<>();
         this.heartBeats = new HashMap<>();
         this.tamanhoAnteriorAnel = 0;
+        this.aguardandoResposta = false;
+        this.sequenciaAguardandoResposta = Integer.MIN_VALUE;
+        this.inicioEsperaResposta = Long.MIN_VALUE;
         this.lastTokenSeenTime = Long.MIN_VALUE;
         this.lastTokenTimeoutBaseTime = Long.MIN_VALUE;
     }
@@ -228,6 +234,17 @@ public class Ring implements Runnable {
             return;
         }
 
+        if (this.aguardandoResposta && !tempoDeRespostaEsgotado()) {
+            Main.log("Token duplicado descartado enquanto aguarda resposta da sequencia " + this.sequenciaAguardandoResposta);
+            return;
+        }
+        if (this.aguardandoResposta) {
+            Main.log("Timeout local da resposta, retransmitindo sequencia " + this.sequenciaAguardandoResposta);
+            this.aguardandoResposta = false;
+            this.sequenciaAguardandoResposta = Integer.MIN_VALUE;
+            this.inicioEsperaResposta = Long.MIN_VALUE;
+        }
+
         Mensagem mensagem = this.listaMensagens.peekFirst();
         int ttlInicial = Math.max(2, this.anel.size() * 2);
         String pacote = Packet.data(
@@ -244,7 +261,17 @@ public class Ring implements Runnable {
         }
 
         Main.log("Enviando mensagem para " + mensagem.destino + " com sequencia " + mensagem.indice);
+        this.aguardandoResposta = true;
+        this.sequenciaAguardandoResposta = mensagem.indice;
+        this.inicioEsperaResposta = System.currentTimeMillis();
         this.socket.sendPacket(pacote, this.nextIP);
+    }
+
+    private boolean tempoDeRespostaEsgotado() {
+        if (this.inicioEsperaResposta == Long.MIN_VALUE) {
+            return true;
+        }
+        return System.currentTimeMillis() - this.inicioEsperaResposta >= Math.max(1000, this.timeoutToken);
     }
 
     private boolean deveCorromperPacote() {
@@ -348,6 +375,18 @@ public class Ring implements Runnable {
     public synchronized void chegouResposta(Packet recebido) {
         Main.log("Chegou uma resposta");
 
+        if (this.listaMensagens.isEmpty()) {
+            Main.log("Resposta duplicada/atrasada descartada: fila vazia");
+            return;
+        }
+
+        Mensagem pendente = this.listaMensagens.peekFirst();
+        if (recebido.sequencia != pendente.indice) {
+            Main.log("Resposta duplicada/atrasada descartada: sequencia recebida "
+                + recebido.sequencia + ", pendente " + pendente.indice);
+            return;
+        }
+
         if (!recebido.valid || "NAK".equals(recebido.flag)) {
             Main.log("Entrega falhou, mensagem permanece na fila");
         } else if ("maquinainexistente".equals(recebido.flag)) {
@@ -365,6 +404,9 @@ public class Ring implements Runnable {
             Main.log("Flag de resposta desconhecida: " + recebido.flag);
         }
 
+        this.aguardandoResposta = false;
+        this.sequenciaAguardandoResposta = Integer.MIN_VALUE;
+        this.inicioEsperaResposta = Long.MIN_VALUE;
         enviarToken("fim-resposta");
     }
 

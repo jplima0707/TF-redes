@@ -10,7 +10,7 @@ public class Config {
         delayDoToken = 100;
         probErro = 0.0;
         timeoutToken = 1000;
-        tempoMinimoToken = 2;
+        tempoMinimoToken = 150;
     }
 
     public Config(String nome){
