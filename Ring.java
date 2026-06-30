@@ -377,7 +377,20 @@ public class Ring implements Runnable {
     }
 
     public synchronized void chegouUmDiscover(Packet p) {
-        Main.log("Chegou um discover");
+        Main.log("Chegou um discover de " + p.origem);
+
+        if (p.origem != null && p.ipOrigem != null && !p.origem.equalsIgnoreCase(this.nomeDaMaquina)) {
+            Packet entry = new Packet();
+            entry.tipo = 20;
+            entry.origem = p.origem;
+            entry.ipOrigem = p.ipOrigem;
+            entry.valid = true;
+            this.hostsConhecidos.put(p.origem, entry);
+            this.heartBeats.put(p.origem, System.currentTimeMillis());
+            this.proximaMensagemEsperada.putIfAbsent(p.origem, 0);
+            atualizarTopologia();
+        }
+
         this.socket.sendBroadcast(Packet.hello(this.nomeDaMaquina, this.selfIP));
     }
 

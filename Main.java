@@ -12,7 +12,7 @@ public class Main {
 
             Config conf = Config.lerArquivo("config.txt");
             String ip = conf.getIp();
-            int port = 6000;
+            int port = 6011;
 
             Ring ring = new Ring(conf, ip, port);
 
