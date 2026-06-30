@@ -21,6 +21,7 @@ public class Ring implements Runnable {
     private final LinkedList<Mensagem> listaMensagens;
     private final HashMap<String, Integer> proximaMensagemEsperada;
     private final HashMap<String, Long> heartBeats;
+    private final HashMap<String, Integer> proximaSequenciaLocal;
 
     private volatile String nextIP;
     private volatile String prevIP;
@@ -31,7 +32,6 @@ public class Ring implements Runnable {
     private boolean heartbeatAtivo;
     private boolean souControladora;
     private int tamanhoAnteriorAnel;
-    private int proximaSequenciaLocal;
     private boolean aguardandoResposta;
     private int sequenciaAguardandoResposta;
     private long inicioEsperaResposta;
@@ -51,6 +51,7 @@ public class Ring implements Runnable {
         this.anel = new LinkedList<>();
         this.proximaMensagemEsperada = new HashMap<>();
         this.heartBeats = new HashMap<>();
+        this.proximaSequenciaLocal = new HashMap<>();
         this.tamanhoAnteriorAnel = 0;
         this.aguardandoResposta = false;
         this.sequenciaAguardandoResposta = Integer.MIN_VALUE;
@@ -135,6 +136,7 @@ public class Ring implements Runnable {
             this.heartBeats.remove(host);
             this.hostsConhecidos.remove(host);
             this.proximaMensagemEsperada.remove(host);
+            this.proximaSequenciaLocal.remove(host.trim().toUpperCase());
             mudou = true;
         }
 
@@ -469,6 +471,7 @@ public class Ring implements Runnable {
 
         for (Packet packet : this.anel) {
             this.proximaMensagemEsperada.putIfAbsent(packet.origem, 0);
+            this.proximaSequenciaLocal.putIfAbsent(packet.origem.trim().toUpperCase(), 0);
         }
 
         Packet self = null;
@@ -517,10 +520,10 @@ public class Ring implements Runnable {
             Main.log("Fila cheia, mensagem descartada");
             return false;
         }
-
-        this.listaMensagens.add(new Mensagem(mensagem, destinoNormalizado, this.proximaSequenciaLocal));
-        Main.log("Mensagem enfileirada para " + destinoNormalizado + " com sequencia " + this.proximaSequenciaLocal);
-        this.proximaSequenciaLocal++;
+        int sequencia = this.proximaSequenciaLocal.get(destinoNormalizado.toUpperCase());
+        this.listaMensagens.add(new Mensagem(mensagem, destinoNormalizado, sequencia));
+        Main.log("Mensagem enfileirada para " + destinoNormalizado + " com sequencia " + sequencia);
+        this.proximaSequenciaLocal.replace(destinoNormalizado, ++sequencia);
         return true;
     }
 
