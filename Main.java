@@ -1,3 +1,4 @@
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.net.Inet4Address;
@@ -15,9 +16,16 @@ public class Main {
 
             Main.outputLog = new PrintWriter(new FileWriter("out.log", false), true);
 
-            Config conf = args.length > 0 ? new Config(args[0]) : new Config();
+            Config conf;
+            if (args.length == 1 && args[0].contains(".conf")) {
+                conf = new Config(new FileReader(args[0]));
+            }
+            else{
+                conf  =  args.length > 0 ? new Config(args[0]) : new Config();
+            }
             int port = args.length > 1 ? Integer.parseInt(args[1]) : 6000;
             String ip = args.length > 2 ? args[2].trim() : descobrirIpLocal();
+            
             System.out.printf("Iniciando %s em %s:%d%n", conf.getNome(), ip, port);
 
             Ring ring = new Ring(conf, ip, port);

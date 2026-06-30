@@ -1,9 +1,13 @@
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.List;
+
 public class Config {
     private String nomeDaMaquina;
-    private int delayDoToken;
+    private int    delayDoToken;
     private double probErro;
-    private int timeoutToken;
-    private int tempoMinimoToken;
+    private int    timeoutToken;
+    private int    tempoMinimoToken;
 
     public Config(){
         nomeDaMaquina = "B";
@@ -17,6 +21,28 @@ public class Config {
         this();
         if (nome != null && !nome.isBlank()) {
             nomeDaMaquina = nome.trim();
+        }
+    }
+
+    public Config(FileReader confFile) throws Exception{
+        this();
+        List<String> lines = confFile.readAllLines();
+        for (String string : lines) {
+            if (string.contains("nomeDaMaquina:")) {
+                this.nomeDaMaquina = string.substring(string.indexOf(':')+1).trim();
+            }
+            if (string.contains("delayDoToken:")) {
+                this.delayDoToken = Integer.parseInt(string.substring(string.indexOf(':')+1).trim());
+            }
+            if (string.contains("probErro:")) {
+                this.probErro = Double.parseDouble(string.substring(string.indexOf(':')+1).trim());
+            }
+            if (string.contains("timeoutToken:")) {
+                this.timeoutToken = Integer.parseInt(string.substring(string.indexOf(':')+1).trim());
+            }
+            if (string.contains("tempoMinimoToken:")) {
+                this.tempoMinimoToken = Integer.parseInt(string.substring(string.indexOf(':')+1).trim());
+            }
         }
     }
 
