@@ -270,6 +270,13 @@ public class Ring implements Runnable {
             Main.log("HELLO invalido descartado");
             return;
         }
+        if (p.origem.equalsIgnoreCase(this.nomeDaMaquina)) {
+            if (!p.ipOrigem.trim().equals(this.selfIP)) {
+                Main.log("HELLO com apelido duplicado ignorado: " + p.origem + " em " + p.ipOrigem);
+            }
+            notifyAll();
+            return;
+        }
 
         Packet anterior = this.hostsConhecidos.get(p.origem);
         this.hostsConhecidos.put(p.origem, p);
@@ -378,6 +385,23 @@ public class Ring implements Runnable {
 
     public synchronized void chegouUmDiscover(Packet p) {
         Main.log("Chegou um discover");
+        if (p.valid && p.origem != null && p.ipOrigem != null) {
+            if (p.origem.equalsIgnoreCase(this.nomeDaMaquina)) {
+                if (!p.ipOrigem.trim().equals(this.selfIP)) {
+                    Main.log("DISCOVER com apelido duplicado ignorado: " + p.origem + " em " + p.ipOrigem);
+                }
+            } else {
+                Packet anterior = this.hostsConhecidos.get(p.origem);
+                this.hostsConhecidos.put(p.origem, p);
+                this.heartBeats.put(p.origem, System.currentTimeMillis());
+                this.proximaMensagemEsperada.putIfAbsent(p.origem, 0);
+                if (anterior == null || !anterior.ipOrigem.equals(p.ipOrigem)) {
+                    Main.log("DISCOVER adicionou/atualizou host " + p.origem);
+                    atualizarTopologia();
+                }
+                notifyAll();
+            }
+        }
         this.socket.sendBroadcast(Packet.hello(this.nomeDaMaquina, this.selfIP));
     }
 

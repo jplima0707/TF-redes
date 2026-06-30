@@ -1,5 +1,10 @@
 import java.io.FileWriter;
 import java.io.PrintWriter;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
 import java.util.Scanner;
 
 public class Main {
@@ -71,4 +76,26 @@ public class Main {
         }
     }
 
+    private static String descobrirIpLocal() throws Exception {
+        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        while (interfaces.hasMoreElements()) {
+            NetworkInterface networkInterface = interfaces.nextElement();
+            if (!interfaceValida(networkInterface)) {
+                continue;
+            }
+
+            Enumeration<InetAddress> addresses = networkInterface.getInetAddresses();
+            while (addresses.hasMoreElements()) {
+                InetAddress address = addresses.nextElement();
+                if (address instanceof Inet4Address && !address.isLoopbackAddress() && !address.isLinkLocalAddress()) {
+                    return address.getHostAddress();
+                }
+            }
+        }
+        return InetAddress.getLocalHost().getHostAddress();
+    }
+
+    private static boolean interfaceValida(NetworkInterface networkInterface) throws SocketException {
+        return networkInterface.isUp() && !networkInterface.isLoopback() && !networkInterface.isVirtual();
+    }
 }

@@ -2,6 +2,11 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class Udp implements Runnable {
 
@@ -28,9 +33,12 @@ public class Udp implements Runnable {
     }
 
     public synchronized boolean sendBroadcast(String p) {
-        Main.log(String.format("Enviando broadcast: %s%n", p));
         try {
-            bcSocket.send(new DatagramPacket(p.getBytes(), p.getBytes().length, InetAddress.getByName("255.255.255.255"), this.port));
+            byte[] bytes = p.getBytes();
+            for (InetAddress destino : listarEnderecosDeBroadcast()) {
+                Main.log(String.format("Enviando broadcast para %s: %s%n", destino.getHostAddress(), p));
+                bcSocket.send(new DatagramPacket(bytes, bytes.length, destino, this.port));
+            }
         } catch (IOException e) {
             e.printStackTrace();
             return false;
@@ -42,7 +50,7 @@ public class Udp implements Runnable {
     public synchronized boolean sendPacket(String p, String ipDestino) {
         Main.log(String.format("Enviando pacote: %s para %s%n", p, ipDestino));
         try {
-            outSocket.send(new DatagramPacket(p.getBytes(), p.getBytes().length, InetAddress.getByName(ipDestino), this.port));
+            outSocket.send(new DatagramPacket(p.getBytes(), p.getBytes().length, InetAddress.getByName(ipDestino.trim()), this.port));
         } catch (IOException e) {
             e.printStackTrace();
             return false;
@@ -52,9 +60,11 @@ public class Udp implements Runnable {
 
     @Override
     public void run() {
-        DatagramPacket p = new DatagramPacket(new byte[255], 255);
+        byte[] buffer = new byte[2048];
+        DatagramPacket p = new DatagramPacket(buffer, buffer.length);
         while (true) {
             try {
+                p.setLength(buffer.length);
                 inSocket.receive(p);
                 Packet recebido = new Packet(p.getData(), p.getLength());
                 Main.log(String.format("Pacote recebido: %s%n", recebido.toString()));
@@ -91,5 +101,27 @@ public class Udp implements Runnable {
                 e.printStackTrace();
             }
         }
+    }
+
+    private Set<InetAddress> listarEnderecosDeBroadcast() throws IOException {
+        Set<InetAddress> enderecos = new LinkedHashSet<>();
+        enderecos.add(InetAddress.getByName("255.255.255.255"));
+
+        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        while (interfaces.hasMoreElements()) {
+            NetworkInterface networkInterface = interfaces.nextElement();
+            if (!networkInterface.isUp() || networkInterface.isLoopback() || networkInterface.isVirtual()) {
+                continue;
+            }
+
+            for (InterfaceAddress interfaceAddress : networkInterface.getInterfaceAddresses()) {
+                InetAddress broadcast = interfaceAddress.getBroadcast();
+                if (broadcast != null) {
+                    enderecos.add(broadcast);
+                }
+            }
+        }
+
+        return enderecos;
     }
 }

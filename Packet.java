@@ -103,13 +103,13 @@ public class Packet {
 
     public static String discover(String origem, String origemIP)
     {
-        return "10:"+origem+":"+origemIP;
+        return "10:"+origem.trim()+":"+origemIP.trim();
     }
 
     public static String hello(String origem, String origemIP)
     {
         CRC32 crc = new CRC32();
-        String s = "20:"+origem+":"+origemIP+":";
+        String s = "20:"+origem.trim()+":"+origemIP.trim()+":";
         crc.update(s.getBytes());
         return s+crc.getValue();
     }
@@ -122,7 +122,7 @@ public class Packet {
     public static String data(String origem, String destino, String flag, int numSequencia, int TTL, String mensagem)
     {
         CRC32 crc = new CRC32();
-        String s = "2000:"+origem+":"+destino+":"+flag+":"+numSequencia+":"+TTL+":"+mensagem+":";
+        String s = "2000:"+origem.trim()+":"+destino.trim()+":"+flag.trim()+":"+numSequencia+":"+TTL+":"+mensagem.trim()+":";
         crc.update(s.getBytes());
         return s+crc.getValue();
     }
