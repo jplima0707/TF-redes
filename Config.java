@@ -1,3 +1,4 @@
+import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
@@ -24,9 +25,9 @@ public class Config {
         }
     }
 
-    public Config(FileReader confFile) throws Exception{
+    public Config(BufferedReader confFile) throws Exception {
         this();
-        List<String> lines = confFile.readAllLines();
+        List<String> lines = confFile.lines().toList();
         for (String string : lines) {
             if (string.contains("nomeDaMaquina:")) {
                 this.nomeDaMaquina = string.substring(string.indexOf(':')+1).trim();

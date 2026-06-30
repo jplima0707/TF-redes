@@ -7,6 +7,8 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.Enumeration;
 import java.util.Scanner;
+import java.io.BufferedReader;
+
 
 public class Main {
 
@@ -18,7 +20,7 @@ public class Main {
 
             Config conf;
             if (args.length == 1 && args[0].contains(".conf")) {
-                conf = new Config(new FileReader(args[0]));
+                conf = new Config(new BufferedReader(new FileReader(args[0])));
             }
             else{
                 conf  =  args.length > 0 ? new Config(args[0]) : new Config();
