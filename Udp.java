@@ -89,6 +89,10 @@ public class Udp implements Runnable {
                             Main.log("Pacote de dados malformado descartado");
                             break;
                         }
+                        if (recebido.origem.equalsIgnoreCase(selfNome) && recebido.destino.equalsIgnoreCase(selfNome)) {
+                            Main.log("Pacote de dados local circulante descartado");
+                            break;
+                        }
                         if (recebido.destino.equalsIgnoreCase(selfNome)) {
                             this.ring.chegouMensagem(recebido);
                         } else if (recebido.origem.equalsIgnoreCase(selfNome)) {

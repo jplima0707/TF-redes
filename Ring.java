@@ -505,12 +505,19 @@ public class Ring implements Runnable {
         if (mensagem == null || mensagem.isBlank() || destino == null || destino.isBlank()) {
             return false;
         }
+
+        String destinoNormalizado = destino.trim();
+        if (destinoNormalizado.equalsIgnoreCase(this.nomeDaMaquina)) {
+            Main.log("Mensagem local para " + this.nomeDaMaquina + ": " + mensagem);
+            System.out.printf("Mensagem recebida de %s: %s%n", this.nomeDaMaquina, mensagem);
+            return true;
+        }
+
         if (this.listaMensagens.size() >= MAX_FILA) {
             Main.log("Fila cheia, mensagem descartada");
             return false;
         }
 
-        String destinoNormalizado = destino.trim();
         this.listaMensagens.add(new Mensagem(mensagem, destinoNormalizado, this.proximaSequenciaLocal));
         Main.log("Mensagem enfileirada para " + destinoNormalizado + " com sequencia " + this.proximaSequenciaLocal);
         this.proximaSequenciaLocal++;
