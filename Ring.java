@@ -30,6 +30,7 @@ public class Ring implements Runnable {
     private Thread heartbeatThread;
     private boolean heartbeatAtivo;
     private boolean souControladora;
+    private int tamanhoAnteriorAnel;
     private int proximaSequenciaLocal;
     private long lastTokenSeenTime;
     private long lastTokenTimeoutBaseTime;
@@ -47,6 +48,7 @@ public class Ring implements Runnable {
         this.anel = new LinkedList<>();
         this.proximaMensagemEsperada = new HashMap<>();
         this.heartBeats = new HashMap<>();
+        this.tamanhoAnteriorAnel = 0;
         this.lastTokenSeenTime = Long.MIN_VALUE;
         this.lastTokenTimeoutBaseTime = Long.MIN_VALUE;
     }
@@ -181,16 +183,16 @@ public class Ring implements Runnable {
         }
     }
 
-    private void atualizarEstadoControladora() {
+    private void atualizarEstadoControladora(int tamanhoAnterior) {
         boolean eraControladora = this.souControladora;
         boolean agoraSouControladora = isFirst();
 
         this.souControladora = agoraSouControladora;
 
-        if (agoraSouControladora && !eraControladora) {
+        if (agoraSouControladora && (!eraControladora || tamanhoAnterior < 2)) {
             Main.log("Assumindo controle do token");
             if (this.anel.size() > 1) {
-                enviarToken("nova-controladora");
+                enviarToken(tamanhoAnterior < 2 ? "anel-formado" : "nova-controladora");
             }
         } else if (!agoraSouControladora && eraControladora) {
             Main.log("Deixando de ser controladora");
@@ -406,10 +408,12 @@ public class Ring implements Runnable {
     }
 
     public synchronized void atualizarTopologia() {
+        int tamanhoAnterior = this.tamanhoAnteriorAnel;
         registrarHostLocal();
 
         this.anel = new LinkedList<>(this.hostsConhecidos.values());
         this.anel.sort((x, y) -> x.origem.compareToIgnoreCase(y.origem));
+        this.tamanhoAnteriorAnel = this.anel.size();
 
         if (this.anel.isEmpty()) {
             this.nextIP = null;
@@ -444,7 +448,7 @@ public class Ring implements Runnable {
         Main.log("Host anterior: " + prev.origem);
         Main.log("Host proximo: " + next.origem);
 
-        atualizarEstadoControladora();
+        atualizarEstadoControladora(tamanhoAnterior);
     }
 
     private int ttlResetado() {
@@ -460,7 +464,9 @@ public class Ring implements Runnable {
             return false;
         }
 
-        this.listaMensagens.add(new Mensagem(mensagem, destino, this.proximaSequenciaLocal));
+        String destinoNormalizado = destino.trim();
+        this.listaMensagens.add(new Mensagem(mensagem, destinoNormalizado, this.proximaSequenciaLocal));
+        Main.log("Mensagem enfileirada para " + destinoNormalizado + " com sequencia " + this.proximaSequenciaLocal);
         this.proximaSequenciaLocal++;
         return true;
     }

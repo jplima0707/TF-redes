@@ -84,9 +84,9 @@ public class Udp implements Runnable {
                         }
                         break;
                     case 2000:
-                        if (recebido.destino.equals(selfNome)) {
+                        if (recebido.destino.equalsIgnoreCase(selfNome)) {
                             this.ring.chegouMensagem(recebido);
-                        } else if (recebido.origem.equals(selfNome)) {
+                        } else if (recebido.origem.equalsIgnoreCase(selfNome)) {
                             this.ring.chegouResposta(recebido);
                         } else {
                             this.ring.encaminharMensagem(recebido);

@@ -13,6 +13,13 @@ public class Config {
         tempoMinimoToken = 2;
     }
 
+    public Config(String nome){
+        this();
+        if (nome != null && !nome.isBlank()) {
+            nomeDaMaquina = nome.trim();
+        }
+    }
+
     public Config(String nome, int delay, int probErroBase100, int timeout, int tempoMinimo){
         if(probErroBase100 > 100){
             probErroBase100 = 100;
