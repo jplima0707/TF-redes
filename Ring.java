@@ -22,8 +22,8 @@ public class Ring implements Runnable {
     private final HashMap<String, Integer> proximaMensagemEsperada;
     private final HashMap<String, Long> heartBeats;
 
-    private String nextIP;
-    private String prevIP;
+    private volatile String nextIP;
+    private volatile String prevIP;
     private LinkedList<Packet> anel;
     private Udp socket;
     private Thread timeoutThread;
