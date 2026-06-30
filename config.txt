@@ -1,0 +1,7 @@
+# Configuracao da maquina
+nome=A
+ip=172.20.10.3
+delay=100
+probErro=10
+timeout=5000
+tempoMinimo=500

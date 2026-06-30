@@ -66,7 +66,9 @@ public class Packet {
                     i += this.destino.length();
                     this.flag = read(packet, i++, size);
                     i += this.flag.length();
-                    this.sequencia = Integer.parseInt(read(packet, i++, size));
+                    String seqString = read(packet, i++, size);
+                    i += seqString.length();
+                    this.sequencia = Integer.parseInt(seqString);
                     String ttlString = read(packet, i++, size);
                     i += ttlString.length();
                     this.ttl = Integer.parseInt(ttlString);

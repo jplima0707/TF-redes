@@ -10,25 +10,22 @@ public class Main {
 
             Main.outputLog = new PrintWriter(new FileWriter("out.log", false), true);
 
-            Config conf = new Config();
-            String ip = "10.32.162.226";
-            int port = 6011;
+            Config conf = Config.lerArquivo("config.txt");
+            String ip = conf.getIp();
+            int port = 6000;
 
             Ring ring = new Ring(conf, ip, port);
 
-            // Java não tem recebimento de pacote não bloqueante, então tem que ter uma Thread a parte para receber
             Udp network = new Udp(port, conf.getNome(), ring);
             ring.setSocket(network);
             Thread t = new Thread(() -> {try {
                 network.run();
             } catch (Exception e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }});
             t.start();
             
 
-            // Inicia o anel, se estiver sozinho espera 10s e tenta de novo
             while (!ring.initialize()) {
                 try {
                     Thread.sleep(10000);

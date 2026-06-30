@@ -216,7 +216,7 @@ public class Ring implements Runnable {
 
     private void encaminharTokenOuMensagem() {
         try {
-            Thread.sleep(this.delayDoToken);
+            this.wait(this.delayDoToken);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
